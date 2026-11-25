@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -15,7 +15,7 @@ import {
   ArrowLeft,
   Layers,
 } from 'lucide-react';
-import { useAdminAuth } from '../../../../layout';
+import { useAdminAuth, getStoredAdminToken } from '../../../../layout';
 import { apiRequest } from '../../../../../../services/nexoraClient';
 import {
   OrgDetail,
@@ -33,8 +33,13 @@ type Stage = Project['stages'][number];
 type Task = Stage['tasks'][number];
 
 export default function ProjectDetailPage() {
-  const { orgId, projectId } = useParams<{ orgId: string; projectId: string }>();
-  const { token } = useAdminAuth();
+  const params = useParams();
+  const rawOrgId = params?.orgId;
+  const rawProjectId = params?.projectId;
+  const orgId = typeof rawOrgId === 'string' ? rawOrgId : Array.isArray(rawOrgId) ? rawOrgId[0] : '';
+  const projectId = typeof rawProjectId === 'string' ? rawProjectId : Array.isArray(rawProjectId) ? rawProjectId[0] : '';
+
+  const { token: authContextToken } = useAdminAuth();
   const [project, setProject] = useState<Project | null>(null);
   const [orgDetail, setOrgDetail] = useState<OrgDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -42,7 +47,11 @@ export default function ProjectDetailPage() {
   const [openStages, setOpenStages] = useState<Set<string>>(new Set());
   const [toast, setToast] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
-  async function load() {
+  const load = useCallback(async () => {
+    if (!orgId || !projectId) return;
+    const token = authContextToken || getStoredAdminToken();
+    if (!token) return;
+
     setLoading(true);
     setError('');
     try {
@@ -58,9 +67,11 @@ export default function ProjectDetailPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [orgId, projectId, authContextToken]);
 
-  useEffect(() => { if (token && orgId && projectId) void load(); }, [token, orgId, projectId]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   function notify(kind: 'ok' | 'err', text: string) {
     setToast({ kind, text });
@@ -76,6 +87,7 @@ export default function ProjectDetailPage() {
   }
 
   async function updateTaskStatus(taskId: string, status: string) {
+    const token = authContextToken || getStoredAdminToken();
     try {
       await apiRequest(
         `/api/v1/superadmin/organizations/${orgId}/tasks/${taskId}`,
@@ -90,6 +102,7 @@ export default function ProjectDetailPage() {
   }
 
   async function updateStageStatus(stageId: string, status: string) {
+    const token = authContextToken || getStoredAdminToken();
     try {
       await apiRequest(
         `/api/v1/superadmin/organizations/${orgId}/stages/${stageId}/status`,
@@ -105,6 +118,7 @@ export default function ProjectDetailPage() {
 
   async function updateProjectStatus(status: string) {
     if (!project) return;
+    const token = authContextToken || getStoredAdminToken();
     try {
       await apiRequest(
         `/api/v1/superadmin/organizations/${orgId}/projects/${projectId}/status`,
@@ -162,7 +176,7 @@ export default function ProjectDetailPage() {
       ) : error ? (
         <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-6 text-sm text-red-300">
           {error} —{' '}
-          <button onClick={load} className="underline cursor-pointer hover:text-red-200">
+          <button onClick={() => void load()} className="underline cursor-pointer hover:text-red-200">
             retry
           </button>
         </div>
@@ -225,7 +239,7 @@ export default function ProjectDetailPage() {
                   ))}
                 </select>
                 <button
-                  onClick={load}
+                  onClick={() => void load()}
                   className="flex items-center gap-1.5 rounded-xl border border-white/[0.08] px-3 py-2 text-xs text-zinc-400 hover:text-orange-300 hover:border-orange-500/30 transition-all cursor-pointer"
                 >
                   <RefreshCw size={13} />

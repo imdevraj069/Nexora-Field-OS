@@ -17,15 +17,27 @@ import {
 import { NexoraMark } from '../../components/svg/NexoraMark';
 
 // ─── Auth context ────────────────────────────────────────────────────────────
-const TOKEN_KEY = 'nexora_superadmin_token';
+export const TOKEN_KEY = 'nexora_superadmin_token';
+
+export function getStoredAdminToken(): string {
+  if (typeof window === 'undefined') return '';
+  return sessionStorage.getItem(TOKEN_KEY) || '';
+}
 
 interface AuthCtx {
   token: string;
   setToken: (t: string) => void;
   logout: () => void;
+  isReady: boolean;
 }
 
-const AuthContext = createContext<AuthCtx>({ token: '', setToken: () => {}, logout: () => {} });
+const AuthContext = createContext<AuthCtx>({
+  token: '',
+  setToken: () => {},
+  logout: () => {},
+  isReady: false,
+});
+
 export const useAdminAuth = () => useContext(AuthContext);
 
 // ─── Nav items ───────────────────────────────────────────────────────────────
@@ -63,12 +75,10 @@ function AdminSidebar({ open, onClose }: { open: boolean; onClose: () => void })
       </AnimatePresence>
 
       {/* Sidebar panel */}
-      <motion.aside
-        initial={false}
-        animate={{ x: open ? 0 : '-100%' }}
-        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-        className="fixed inset-y-0 left-0 z-30 flex w-64 flex-col border-r border-white/[0.06] bg-[#0c0c0e] lg:static lg:translate-x-0 lg:z-auto"
-        style={{ transform: undefined }}
+      <aside
+        className={`fixed inset-y-0 left-0 z-30 flex w-64 flex-col border-r border-white/[0.06] bg-[#0c0c0e] transition-transform duration-200 ease-in-out lg:static lg:translate-x-0 lg:z-auto ${
+          open ? 'translate-x-0' : '-translate-x-full'
+        }`}
       >
         {/* Logo */}
         <div className="flex items-center gap-3 px-5 py-5 border-b border-white/[0.06]">
@@ -137,7 +147,7 @@ function AdminSidebar({ open, onClose }: { open: boolean; onClose: () => void })
             Sign out
           </button>
         </div>
-      </motion.aside>
+      </aside>
     </>
   );
 }
@@ -199,7 +209,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const [token, setTokenState] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
+  const [isReady, setIsReady] = useState(false);
 
   const setToken = useCallback((t: string) => {
     setTokenState(t);
@@ -215,27 +225,36 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }, [setToken, router]);
 
   useEffect(() => {
-    setMounted(true);
-    const saved = typeof window !== 'undefined' ? sessionStorage.getItem(TOKEN_KEY) : null;
-    if (saved) setTokenState(saved);
+    const saved = getStoredAdminToken();
+    if (saved) {
+      setTokenState(saved);
+    }
+    setIsReady(true);
   }, []);
 
   useEffect(() => {
-    if (!mounted) return;
+    if (!isReady) return;
     const isLoginPage = pathname === '/admin';
     if (!token && !isLoginPage) {
       router.push('/admin');
     } else if (token && isLoginPage) {
       router.push('/admin/dashboard');
     }
-  }, [mounted, token, pathname, router]);
-
-  if (!mounted) return null;
+  }, [isReady, token, pathname, router]);
 
   const isLoginPage = pathname === '/admin';
+
+  if (!isReady) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-[#09090b]">
+        <span className="h-7 w-7 animate-spin rounded-full border-2 border-white/10 border-t-orange-500" />
+      </div>
+    );
+  }
+
   if (isLoginPage) {
     return (
-      <AuthContext.Provider value={{ token, setToken, logout }}>
+      <AuthContext.Provider value={{ token, setToken, logout, isReady }}>
         {children}
       </AuthContext.Provider>
     );
@@ -244,7 +263,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   if (!token) return null;
 
   return (
-    <AuthContext.Provider value={{ token, setToken, logout }}>
+    <AuthContext.Provider value={{ token, setToken, logout, isReady }}>
       <div className="flex h-screen overflow-hidden bg-[#09090b]">
         {/* Desktop sidebar */}
         <div className="hidden lg:flex">
@@ -257,17 +276,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div className="flex flex-1 flex-col overflow-hidden min-w-0">
           <TopBar onMenuOpen={() => setSidebarOpen(true)} />
           <main className="flex-1 overflow-y-auto p-4 lg:p-7">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={pathname}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -4 }}
-                transition={{ duration: 0.18 }}
-              >
-                {children}
-              </motion.div>
-            </AnimatePresence>
+            {children}
           </main>
         </div>
       </div>

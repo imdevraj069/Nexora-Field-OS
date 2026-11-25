@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -18,7 +18,7 @@ import {
   Building2,
   ArrowLeft,
 } from 'lucide-react';
-import { useAdminAuth } from '../../layout';
+import { useAdminAuth, getStoredAdminToken } from '../../layout';
 import { apiRequest } from '../../../../services/nexoraClient';
 import {
   OrgDetail,
@@ -32,15 +32,22 @@ import {
 type TabId = 'members' | 'projects' | 'roles';
 
 export default function OrgDetailPage() {
-  const { orgId } = useParams<{ orgId: string }>();
-  const { token } = useAdminAuth();
+  const params = useParams();
+  const rawOrgId = params?.orgId;
+  const orgId = typeof rawOrgId === 'string' ? rawOrgId : Array.isArray(rawOrgId) ? rawOrgId[0] : '';
+
+  const { token: authContextToken } = useAdminAuth();
   const [detail, setDetail] = useState<OrgDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [tab, setTab] = useState<TabId>('members');
   const [toast, setToast] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
-  async function load() {
+  const load = useCallback(async () => {
+    if (!orgId) return;
+    const token = authContextToken || getStoredAdminToken();
+    if (!token) return;
+
     setLoading(true);
     setError('');
     try {
@@ -51,9 +58,11 @@ export default function OrgDetailPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [orgId, authContextToken]);
 
-  useEffect(() => { if (token && orgId) void load(); }, [token, orgId]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   function notify(kind: 'ok' | 'err', text: string) {
     setToast({ kind, text });
@@ -61,6 +70,7 @@ export default function OrgDetailPage() {
   }
 
   async function toggleUserStatus(userId: string, current: 'ACTIVE' | 'SUSPENDED') {
+    const token = authContextToken || getStoredAdminToken();
     const newStatus = current === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE';
     try {
       await apiRequest(
@@ -76,6 +86,7 @@ export default function OrgDetailPage() {
   }
 
   async function updateProjectStatus(projectId: string, status: string) {
+    const token = authContextToken || getStoredAdminToken();
     try {
       await apiRequest(
         `/api/v1/superadmin/organizations/${orgId}/projects/${projectId}/status`,
@@ -126,7 +137,7 @@ export default function OrgDetailPage() {
       ) : error ? (
         <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-6 text-sm text-red-300">
           {error} —{' '}
-          <button onClick={load} className="underline cursor-pointer hover:text-red-200">
+          <button onClick={() => void load()} className="underline cursor-pointer hover:text-red-200">
             retry
           </button>
         </div>
@@ -169,7 +180,7 @@ export default function OrgDetailPage() {
                 ))}
               </div>
               <button
-                onClick={load}
+                onClick={() => void load()}
                 className="flex items-center gap-1.5 self-start rounded-xl border border-white/[0.08] bg-transparent px-3 py-2 text-xs text-zinc-400 hover:text-orange-300 hover:border-orange-500/40 transition-all cursor-pointer"
               >
                 <RefreshCw size={12} /> Refresh
@@ -200,19 +211,11 @@ export default function OrgDetailPage() {
           </div>
 
           {/* Tab contents */}
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={tab}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.15 }}
-            >
-              {tab === 'members' && <MembersTab detail={detail} onToggle={toggleUserStatus} />}
-              {tab === 'projects' && <ProjectsTab detail={detail} orgId={orgId} onStatusChange={updateProjectStatus} />}
-              {tab === 'roles' && <RolesTab detail={detail} />}
-            </motion.div>
-          </AnimatePresence>
+          <div className="pt-1">
+            {tab === 'members' && <MembersTab detail={detail} onToggle={toggleUserStatus} />}
+            {tab === 'projects' && <ProjectsTab detail={detail} orgId={orgId} onStatusChange={updateProjectStatus} />}
+            {tab === 'roles' && <RolesTab detail={detail} />}
+          </div>
         </>
       ) : null}
     </div>

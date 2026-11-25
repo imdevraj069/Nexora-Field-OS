@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { motion } from 'motion/react';
 import Link from 'next/link';
 import {
@@ -14,7 +14,7 @@ import {
   ArrowRight,
   Database,
 } from 'lucide-react';
-import { useAdminAuth } from '../layout';
+import { useAdminAuth, getStoredAdminToken } from '../layout';
 import { apiRequest } from '../../../services/nexoraClient';
 import {
   PlatformOverview,
@@ -28,13 +28,16 @@ import {
 } from '../../../components/admin/shared';
 
 export default function DashboardPage() {
-  const { token } = useAdminAuth();
+  const { token: authContextToken } = useAdminAuth();
   const [overview, setOverview] = useState<PlatformOverview | null>(null);
   const [recentOrgs, setRecentOrgs] = useState<OrgRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  async function load() {
+  const load = useCallback(async () => {
+    const token = authContextToken || getStoredAdminToken();
+    if (!token) return;
+
     setLoading(true);
     setError('');
     try {
@@ -52,9 +55,11 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [authContextToken]);
 
-  useEffect(() => { if (token) void load(); }, [token]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const completionRate =
     overview && overview.totalTasks > 0
@@ -78,7 +83,7 @@ export default function DashboardPage() {
     return (
       <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-6 text-sm text-red-300">
         {error} —{' '}
-        <button onClick={load} className="underline cursor-pointer hover:text-red-200 transition-colors">
+        <button onClick={() => void load()} className="underline cursor-pointer hover:text-red-200 transition-colors">
           retry
         </button>
       </div>
@@ -92,7 +97,7 @@ export default function DashboardPage() {
         subtitle="Real-time telemetry and overview across all active shards"
         action={
           <button
-            onClick={load}
+            onClick={() => void load()}
             className="flex items-center gap-2 rounded-xl border border-white/[0.08] bg-[#121215] px-3.5 py-2 text-xs font-medium text-zinc-300 hover:border-orange-500/40 hover:text-orange-300 transition-all cursor-pointer shadow-sm"
           >
             <RefreshCw size={13} />
