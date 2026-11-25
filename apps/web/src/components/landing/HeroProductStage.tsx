@@ -44,7 +44,10 @@ export function HeroProductStage() {
         className="relative [transform-style:preserve-3d]"
       >
         {/* Main Desktop Workspace Mockup */}
-        <div className="rounded-[28px] border border-zinc-200/90 bg-white shadow-[0_30px_80px_-24px_rgba(15,23,42,0.22)] overflow-hidden">
+        <div
+          data-surface="light"
+          className="rounded-[28px] border border-zinc-200/90 bg-white text-[#111318] shadow-[0_30px_80px_-24px_rgba(15,23,42,0.22)] overflow-hidden"
+        >
           {/* Browser Chrome */}
           <div className="flex items-center justify-between border-b border-zinc-100 bg-[#fafaf9] px-5 py-3">
             <div className="flex items-center gap-2">
