@@ -59,7 +59,7 @@ function AdminSidebar({ open, onClose }: { open: boolean; onClose: () => void })
 
   return (
     <>
-      {/* Mobile overlay */}
+      {/* Mobile backdrop */}
       <AnimatePresence>
         {open && (
           <motion.div
@@ -68,15 +68,15 @@ function AdminSidebar({ open, onClose }: { open: boolean; onClose: () => void })
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-20 bg-black/70 backdrop-blur-sm lg:hidden"
+            className="fixed inset-0 z-40 bg-black/75 backdrop-blur-sm lg:hidden"
             onClick={onClose}
           />
         )}
       </AnimatePresence>
 
-      {/* Sidebar panel */}
+      {/* Single responsive sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-30 flex w-64 flex-col border-r border-white/[0.06] bg-[#0c0c0e] transition-transform duration-200 ease-in-out lg:static lg:translate-x-0 lg:z-auto ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-white/[0.06] bg-[#0c0c0e] transition-transform duration-200 ease-out lg:static lg:z-auto lg:translate-x-0 ${
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -265,11 +265,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   return (
     <AuthContext.Provider value={{ token, setToken, logout, isReady }}>
       <div className="flex h-screen overflow-hidden bg-[#09090b]">
-        {/* Desktop sidebar */}
-        <div className="hidden lg:flex">
-          <AdminSidebar open={true} onClose={() => {}} />
-        </div>
-        {/* Mobile sidebar */}
+        {/* Only ONE instance of AdminSidebar rendered */}
         <AdminSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
         {/* Content canvas */}
