@@ -10,6 +10,10 @@ export const AuthController = {
     const result = await AuthService.register(req.body);
     res.status(201).json(result);
   },
+  registerOrg: async (req: Request, res: Response) => {
+    const result = await AuthService.registerOrg(req.body);
+    res.status(201).json(result);
+  },
   verifyEmail: async (req: Request, res: Response) => {
     const result = await AuthService.verifyEmail(req.body.email, req.body.otp);
     res.json(result);

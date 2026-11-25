@@ -63,6 +63,85 @@ export const AuthService = {
     };
   },
 
+  async registerOrg(input: {
+    fullName?: string;
+    email?: string;
+    password?: string;
+    orgName?: string;
+    industryType?: string;
+  }) {
+    if (!input.email || !input.password || !input.fullName || !input.orgName) {
+      throw new AppError(400, 'fullName, email, password, and orgName are required');
+    }
+
+    const email = input.email.toLowerCase().trim();
+    const userId = generatePrefixedId('USR');
+    const verifyOtp = crypto.randomBytes(3).toString('hex').toUpperCase();
+
+    // Generate 3-letter uppercase initials from orgName
+    const words = input.orgName.trim().split(/\s+/);
+    let orgInitials = words.map((w) => w[0]).join('').slice(0, 3).toUpperCase();
+    if (orgInitials.length < 2) orgInitials = (input.orgName.replace(/[^A-Za-z0-9]/g, '').slice(0, 3) || 'ORG').toUpperCase();
+
+    const orgId = generateOrgId(orgInitials);
+    const shardId = resolveShardFromOrgId(orgId);
+    const adminFlags = Object.fromEntries(Object.values(PERMISSION_FLAGS).map((f) => [f, true]));
+    const adminRoleId = `ROLE-${orgId}-ADMIN`;
+
+    await IdentityRepo.insertUser({
+      userId,
+      email,
+      passwordHash: hashPassword(input.password),
+      fullName: input.fullName.trim(),
+      verifyTokenHash: hashToken(verifyOtp),
+    });
+
+    await IdentityRepo.createOrganization({
+      orgId,
+      orgName: input.orgName.trim(),
+      orgInitials,
+      shardId,
+      userId,
+      industryType: input.industryType ?? 'general_field_ops',
+      adminRoleId,
+      adminFlags,
+    });
+
+    // Auto-verify creator user so they can immediately access the workspace
+    await IdentityRepo.verifyUserOtp(email, hashToken(verifyOtp));
+
+    const payload: AuthTokenPayload = {
+      sub: userId,
+      email,
+      activeOrgId: orgId,
+      shardId,
+      roleId: adminRoleId,
+    };
+    const accessToken = jwt.sign(payload, envConfig.jwtAccessSecret, { expiresIn: '15m' });
+
+    publishEmailTask({
+      template: 'verify-email',
+      to: email,
+      subject: 'Welcome to Nexora Field OS — Organization Created',
+      data: { fullName: input.fullName.trim(), verifyOtp, orgId },
+    });
+
+    return {
+      accessToken,
+      user: {
+        userId,
+        email,
+        fullName: input.fullName.trim(),
+      },
+      organization: {
+        org_id: orgId,
+        name: input.orgName.trim(),
+        shardId,
+      },
+      roleId: adminRoleId,
+    };
+  },
+
   async register(input: {
     email?: string;
     password?: string;
