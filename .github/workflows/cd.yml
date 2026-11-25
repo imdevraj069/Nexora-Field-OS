@@ -1,0 +1,99 @@
+name: Nexora Standalone CD Funnel
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: "Deployment profile (dev or cluster)"
+        required: true
+        default: "dev"
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}
+
+jobs:
+  build-standalone-images:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - name: identity-service
+            dockerfile: services/identity-service/Dockerfile
+            max_mb: 320
+          - name: storage-service
+            dockerfile: services/storage-service/Dockerfile
+            max_mb: 340
+          - name: worker-service
+            dockerfile: services/worker-service/Dockerfile
+            max_mb: 300
+          - name: gateway-service
+            dockerfile: services/gateway-service/Dockerfile
+            max_mb: 330
+          - name: ai-governance-service
+            dockerfile: services/ai-governance-service/Dockerfile
+            max_mb: 500
+          - name: web
+            dockerfile: apps/web/Dockerfile
+            max_mb: 360
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & verify standalone image size
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          load: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/nexora-${{ matrix.name }}:${{ github.sha }}
+            ${{ env.IMAGE_PREFIX }}/nexora-${{ matrix.name }}:latest
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+      - name: Enforce image size budget (< ${{ matrix.max_mb }} MB)
+        run: |
+          SIZE_BYTES=$(docker image inspect "${{ env.IMAGE_PREFIX }}/nexora-${{ matrix.name }}:${{ github.sha }}" --format='{{.Size}}')
+          SIZE_MB=$((SIZE_BYTES / 1024 / 1024))
+          echo "Image ${{ matrix.name }} size: ${SIZE_MB} MB (budget: ${{ matrix.max_mb }} MB)"
+          if [ "$SIZE_MB" -gt "${{ matrix.max_mb }}" ]; then
+            echo "::error::Standalone image exceeded ${SIZE_MB} MB > ${{ matrix.max_mb }} MB"
+            exit 1
+          fi
+
+      - name: Push standalone image to GHCR
+        run: |
+          docker push "${{ env.IMAGE_PREFIX }}/nexora-${{ matrix.name }}:${{ github.sha }}"
+          docker push "${{ env.IMAGE_PREFIX }}/nexora-${{ matrix.name }}:latest"
+
+  rolling-tunnel-deploy:
+    needs: build-standalone-images
+    runs-on: ubuntu-latest
+    if: ${{ vars.NEXORA_DEPLOY_HOST != '' }}
+    steps:
+      - name: Trigger zero-downtime rolling update on Nexora host
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ vars.NEXORA_DEPLOY_HOST }}
+          username: ${{ vars.NEXORA_DEPLOY_USER }}
+          key: ${{ secrets.NEXORA_DEPLOY_SSH_KEY }}
+          script: |
+            cd "${{ vars.NEXORA_DEPLOY_DIR }}"
+            git pull --ff-only origin main
+            NEXORA_IMAGE_TAG="${{ github.sha }}" ./scripts/nexora-deploy.sh "${{ inputs.profile || 'dev' }}"

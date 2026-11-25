@@ -1,10 +1,14 @@
-import { randomInt } from 'node:crypto';
-
 export type ShardId = 1 | 2 | 3;
 
 const BASE36_ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const ORG_INITIALS_REGEX = /^[A-Z]{3}$/;
 const ORG_ID_REGEX = /^([A-Z]{3})-(\d{2})-([0-9A-Z]{5})$/;
+
+function secureRandomIndex(maxExclusive: number): number {
+  const arr = new Uint32Array(1);
+  globalThis.crypto.getRandomValues(arr);
+  return arr[0] % maxExclusive;
+}
 
 /**
  * Generates a unique Organization ID in the format `{ORG}-{YY}-{UNIQUEID}`.
@@ -19,7 +23,7 @@ export function generateOrgId(orgInitials: string, date: Date = new Date()): str
   const yy = String(date.getUTCFullYear()).slice(-2);
   let uniqueId = '';
   for (let i = 0; i < 5; i += 1) {
-    uniqueId += BASE36_ALPHABET[randomInt(0, BASE36_ALPHABET.length)];
+    uniqueId += BASE36_ALPHABET[secureRandomIndex(BASE36_ALPHABET.length)];
   }
   return `${normalized}-${yy}-${uniqueId}`;
 }
@@ -69,7 +73,7 @@ export function resolveShardFromOrgId(orgId: string): ShardId {
 export function generatePrefixedId(prefix: 'USR' | 'PRJ' | 'STG' | 'TSK' | 'FIL'): string {
   let token = '';
   for (let i = 0; i < 10; i += 1) {
-    token += BASE36_ALPHABET[randomInt(0, BASE36_ALPHABET.length)];
+    token += BASE36_ALPHABET[secureRandomIndex(BASE36_ALPHABET.length)];
   }
   return `${prefix}-${token}`;
 }

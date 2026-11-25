@@ -1,10 +1,10 @@
 FROM node:22-alpine AS deps
 WORKDIR /app
 RUN corepack enable pnpm
-COPY package.json pnpm-workspace.yaml tsconfig.base.json ./
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* tsconfig.base.json ./
 COPY packages/shared-types/package.json packages/shared-types/
 COPY apps/web/package.json apps/web/
-RUN pnpm install --filter @nexora/web... --no-frozen-lockfile
+RUN pnpm install --filter @nexora/web... --no-frozen-lockfile --ignore-scripts
 
 FROM deps AS builder
 COPY packages/shared-types/ packages/shared-types/

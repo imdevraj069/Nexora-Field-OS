@@ -1,0 +1,30 @@
+# Localhost testing port bindings (automatically merged by `docker compose`).
+# Binds strictly to 127.0.0.1. In production with Cloudflare Tunnel, deploy with:
+#   docker compose -f docker-compose.yml --profile cluster --profile tunnel up -d
+
+services:
+  nginx:
+    ports:
+      - "127.0.0.1:8080:80"
+
+  minio:
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+
+  rabbitmq:
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+
+  pg-dev:
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  mongo-dev:
+    ports:
+      - "127.0.0.1:27017:27017"
+
+  redis-dev:
+    ports:
+      - "127.0.0.1:6379:6379"

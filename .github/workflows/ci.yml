@@ -1,0 +1,40 @@
+name: Nexora CI Gate
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build packages and microservices
+        run: pnpm build
+
+      - name: Build Next.js standalone web app
+        run: pnpm --filter @nexora/web build
+
+      - name: Run unit and shard-router tests
+        run: pnpm test
+
+      - name: Validate Docker Compose profiles
+        run: |
+          cp .env.dev.example .env
+          docker compose --profile dev config -q
+          docker compose --profile cluster --profile tunnel config -q
