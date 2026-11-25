@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   },
   appleWebApp: {
     capable: true,
-    statusBarStyle: 'black-translucent',
+    statusBarStyle: 'default',
     title: 'Nexora',
   },
 };
@@ -36,8 +36,8 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark scroll-smooth">
-      <body className="min-h-screen bg-[#09090b] text-zinc-100 antialiased font-sans selection:bg-orange-500/20 selection:text-orange-300">
+    <html lang="en" data-theme="light" className="scroll-smooth" suppressHydrationWarning>
+      <body className="min-h-screen antialiased font-sans selection:bg-orange-500/20 selection:text-orange-600">
         <PwaRegister />
         {children}
       </body>

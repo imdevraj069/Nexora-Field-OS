@@ -6,6 +6,7 @@ import { asyncHandler } from '../utils/http';
 const router: Router = Router();
 router.post('/upload', requireMasterStorageKey, uploadMiddleware.single('file'), asyncHandler(StorageController.upload));
 router.get('/internal/files/:fileId', requireMasterReadKey, asyncHandler(StorageController.internalRead));
+router.delete('/internal/files/:fileId', requireMasterReadKey, asyncHandler(StorageController.internalDelete));
 router.get('/files/:fileId', asyncHandler(StorageController.clientSignedRead));
 
 export default router;

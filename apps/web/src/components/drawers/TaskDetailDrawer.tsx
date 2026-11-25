@@ -21,6 +21,7 @@ import { useWorkspaceAuth } from '@/hooks/useWorkspaceAuth';
 import { WorkflowStatusDef, DEFAULT_STATUSES } from '@/stores/useAuthStore';
 import { apiRequest } from '@/services/nexoraClient';
 import { MARLO_EASE } from '@/components/ui/motion';
+import { VoiceRecorderInput } from '@/components/ui/VoiceRecorderInput';
 
 type ChecklistKind = 'CHECK' | 'TEXT' | 'FILE' | 'MEDIA' | 'LINK';
 
@@ -518,7 +519,13 @@ export function TaskDetailDrawer() {
 
                   {/* General Voice Note / Observation Upload */}
                   <div className="rounded-2xl border border-white/[0.06] bg-[#18181c] p-4 space-y-2.5">
-                    <span className="text-xs font-semibold text-white block">Field Observation / Voice Note</span>
+                    <span className="text-xs font-semibold text-white block">
+                      Field Observation / Voice-to-Text Submission
+                    </span>
+                    <VoiceRecorderInput
+                      onAudioCaptured={(file) => setSelectedFile(file)}
+                      onTranscriptUpdate={(txt) => setTextNote(txt)}
+                    />
                     <input
                       type="file"
                       accept="image/*,video/*,audio/*,.pdf"

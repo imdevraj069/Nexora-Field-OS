@@ -1106,4 +1106,178 @@ export const ProjectService = {
       ttl_seconds: 600,
     });
   },
+
+  async deleteFile(auth: AuthContext, projectId: string, fileId: string) {
+    const { ownerOrgId, roleCtx } = await this.resolveAccess(auth.userId, auth.activeOrgId, projectId);
+    if (
+      !hasPermission(roleCtx, PERMISSION_FLAGS.PROJECT_MANAGE) &&
+      !hasPermission(roleCtx, PERMISSION_FLAGS.ORG_MANAGE_SETTINGS) &&
+      !hasPermission(roleCtx, PERMISSION_FLAGS.TASK_UPLOAD_EVIDENCE)
+    ) {
+      throw new AppError(403, 'Forbidden: cannot delete file');
+    }
+    const resp = await fetch(`${gatewayEnv.storageHttpUrl}/api/v1/storage/internal/files/${fileId}`, {
+      method: 'DELETE',
+      headers: {
+        'x-master-read-key': gatewayEnv.masterReadKey,
+        'x-project-id': projectId,
+        'x-org-id': ownerOrgId,
+      },
+    });
+    if (!resp.ok) {
+      const j = (await resp.json().catch(() => ({}))) as { error?: string };
+      throw new AppError(resp.status, j.error || 'Failed to delete file');
+    }
+    return { deleted: true, fileId };
+  },
+
+  async listEvidence(auth: AuthContext, filters: { projectId?: string; type?: string }) {
+    const pool = dataRouter.postgres.getReadPool(auth.shardId, true);
+    const params: unknown[] = [auth.activeOrgId];
+    let where = `m.org_id = $1`;
+    if (filters.projectId) {
+      params.push(filters.projectId);
+      where += ` AND m.project_id = $${params.length}`;
+    }
+    if (filters.type && filters.type !== 'ALL') {
+      if (filters.type === 'IMAGE') where += ` AND m.mime_type LIKE 'image/%'`;
+      else if (filters.type === 'VIDEO') where += ` AND m.mime_type LIKE 'video/%'`;
+      else if (filters.type === 'AUDIO') where += ` AND m.mime_type LIKE 'audio/%'`;
+      else if (filters.type === 'DOCUMENT') where += ` AND m.mime_type NOT LIKE 'image/%' AND m.mime_type NOT LIKE 'video/%' AND m.mime_type NOT LIKE 'audio/%'`;
+    }
+
+    const [filesRes, quotaRes] = await Promise.all([
+      pool.query(
+        `SELECT m.*, p.title AS project_title, t.title AS task_title
+         FROM media_assets m
+         LEFT JOIN projects p ON p.project_id = m.project_id
+         LEFT JOIN tasks t ON t.task_id = m.task_id
+         WHERE ${where}
+         ORDER BY m.created_at DESC`,
+        params,
+      ),
+      pool.query(`SELECT COALESCE(SUM(size_bytes), 0)::bigint AS used_bytes FROM media_assets WHERE org_id = $1`, [
+        auth.activeOrgId,
+      ]),
+    ]);
+
+    let aiMap = new Map<string, { audioTranscript?: string; identifiedLanguages?: string[]; overallEfficiency?: number }>();
+    try {
+      const mongoConn = await dataRouter.mongo.getConnectionForOrg(auth.activeOrgId);
+      const analyses = await mongoConn
+        .collection('ai_raw_analyses')
+        .find({ orgId: auth.activeOrgId })
+        .sort({ createdAt: -1 })
+        .limit(200)
+        .toArray();
+      for (const a of analyses) {
+        if (a.fileId && !aiMap.has(String(a.fileId))) {
+          aiMap.set(String(a.fileId), {
+            audioTranscript: a.audioTranscript ? String(a.audioTranscript) : undefined,
+            identifiedLanguages: Array.isArray(a.identifiedLanguages) ? a.identifiedLanguages.map(String) : [],
+            overallEfficiency: a.overallEfficiency ? Number(a.overallEfficiency) : undefined,
+          });
+        }
+      }
+    } catch {
+      // ignore if mongo empty
+    }
+
+    const files = filesRes.rows.map((r) => {
+      const ai = aiMap.get(r.file_id);
+      return {
+        fileId: r.file_id,
+        projectId: r.project_id,
+        projectTitle: r.project_title ?? r.project_id,
+        taskId: r.task_id,
+        taskTitle: r.task_title ?? null,
+        bucket: r.bucket,
+        objectKey: r.object_key,
+        mimeType: r.mime_type,
+        sizeBytes: Number(r.size_bytes ?? 0),
+        tags: r.tags ?? [],
+        uploadedBy: r.uploaded_by,
+        createdAt: r.created_at,
+        audioTranscript: ai?.audioTranscript ?? null,
+        identifiedLanguages: ai?.identifiedLanguages ?? [],
+        overallEfficiency: ai?.overallEfficiency ?? null,
+      };
+    });
+
+    return {
+      files,
+      usedBytes: Number(quotaRes.rows[0]?.used_bytes ?? 0),
+      quotaBytes: 50 * 1024 * 1024 * 1024,
+    };
+  },
+
+  async getEfficiencyAnalytics(auth: AuthContext) {
+    const pool = dataRouter.postgres.getReadPool(auth.shardId, true);
+    const scoresRes = await pool.query(
+      `SELECT e.*, t.title AS task_title, p.title AS project_title
+       FROM task_efficiency_scores e
+       LEFT JOIN tasks t ON t.task_id = e.task_id
+       LEFT JOIN projects p ON p.project_id = e.project_id
+       WHERE e.org_id = $1
+       ORDER BY e.evaluated_at DESC LIMIT 100`,
+      [auth.activeOrgId],
+    );
+    const rows = scoresRes.rows;
+    const avgEfficiency =
+      rows.length > 0 ? Number((rows.reduce((acc, r) => acc + Number(r.overall_efficiency), 0) / rows.length).toFixed(1)) : 0;
+    const avgTimeliness =
+      rows.length > 0 ? Number((rows.reduce((acc, r) => acc + Number(r.timeliness_score), 0) / rows.length).toFixed(1)) : 0;
+    const avgEvidence =
+      rows.length > 0 ? Number((rows.reduce((acc, r) => acc + Number(r.evidence_completeness), 0) / rows.length).toFixed(1)) : 0;
+
+    return {
+      avgEfficiency,
+      avgTimeliness,
+      avgEvidence,
+      evaluatedCount: rows.length,
+      scores: rows,
+    };
+  },
+
+  async listActivity(auth: AuthContext) {
+    const pool = dataRouter.postgres.getReadPool(auth.shardId, true);
+    const res = await pool.query(
+      `SELECT w.*, p.title AS project_title
+       FROM workflow_transitions w
+       LEFT JOIN projects p ON p.project_id = w.project_id
+       WHERE w.org_id = $1
+       ORDER BY w.created_at DESC LIMIT 60`,
+      [auth.activeOrgId],
+    );
+    return res.rows;
+  },
+
+  async getInbox(auth: AuthContext) {
+    const pool = dataRouter.postgres.getReadPool(auth.shardId, true);
+    const [pendingTasks, overdueTasks, claims] = await Promise.all([
+      pool.query(
+        `SELECT t.task_id, t.project_id, t.title, t.status, t.deadline, p.title AS project_title
+         FROM tasks t JOIN projects p ON p.project_id = t.project_id
+         WHERE t.org_id = $1 AND t.status IN ('SUBMITTED', 'IN_REVIEW')
+         ORDER BY t.updated_at DESC`,
+        [auth.activeOrgId],
+      ),
+      pool.query(
+        `SELECT t.task_id, t.project_id, t.title, t.status, t.deadline, p.title AS project_title
+         FROM tasks t JOIN projects p ON p.project_id = t.project_id
+         WHERE t.org_id = $1 AND t.deadline < NOW() AND t.status NOT IN ('DONE', 'COMPLETED', 'VERIFIED')
+         ORDER BY t.deadline ASC`,
+        [auth.activeOrgId],
+      ),
+      pool.query(
+        `SELECT claim_id, title, amount_paise, status, created_at FROM reimbursement_claims WHERE org_id = $1 AND status = 'SUBMITTED'`,
+        [auth.activeOrgId],
+      ),
+    ]);
+    return {
+      pendingVerifications: pendingTasks.rows,
+      overdueTasks: overdueTasks.rows,
+      pendingClaims: claims.rows,
+    };
+  },
 };

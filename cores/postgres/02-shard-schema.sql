@@ -134,3 +134,67 @@ CREATE INDEX IF NOT EXISTS idx_projects_org ON projects(org_id);
 CREATE INDEX IF NOT EXISTS idx_stages_project ON stages(project_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_stage_assignee ON tasks(stage_id, assigned_user_id);
 CREATE INDEX IF NOT EXISTS idx_media_project ON media_assets(project_id, stage_id, task_id);
+
+-- Finance & Budget Allocation tables (TeamConnect-inspired)
+CREATE TABLE IF NOT EXISTS project_budgets (
+  budget_id VARCHAR(32) PRIMARY KEY,
+  org_id VARCHAR(32) NOT NULL,
+  project_id VARCHAR(32) NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  total_budget_paise BIGINT NOT NULL DEFAULT 0,
+  distributed_budget_paise BIGINT NOT NULL DEFAULT 0,
+  floated_budget_paise BIGINT NOT NULL DEFAULT 0,
+  spent_paise BIGINT NOT NULL DEFAULT 0,
+  revisions_count INT NOT NULL DEFAULT 0,
+  notes TEXT,
+  updated_by VARCHAR(32),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(org_id, project_id)
+);
+
+CREATE TABLE IF NOT EXISTS budget_revisions (
+  revision_id VARCHAR(32) PRIMARY KEY,
+  budget_id VARCHAR(32) NOT NULL REFERENCES project_budgets(budget_id) ON DELETE CASCADE,
+  previous_budget_paise BIGINT NOT NULL,
+  new_budget_paise BIGINT NOT NULL,
+  reason TEXT,
+  changed_by VARCHAR(32),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS expenses (
+  expense_id VARCHAR(32) PRIMARY KEY,
+  org_id VARCHAR(32) NOT NULL,
+  project_id VARCHAR(32) NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  title VARCHAR(255) NOT NULL,
+  category VARCHAR(64) NOT NULL DEFAULT 'MATERIAL',
+  amount_paise BIGINT NOT NULL,
+  funding_source VARCHAR(32) NOT NULL DEFAULT 'PROJECT_BUDGET',
+  payment_status VARCHAR(32) NOT NULL DEFAULT 'UNPAID',
+  vendor_name VARCHAR(255),
+  invoice_number VARCHAR(128),
+  receipt_file_id VARCHAR(32),
+  recorded_by VARCHAR(32),
+  paid_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS reimbursement_claims (
+  claim_id VARCHAR(32) PRIMARY KEY,
+  org_id VARCHAR(32) NOT NULL,
+  project_id VARCHAR(32) NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  user_id VARCHAR(32) NOT NULL,
+  title VARCHAR(255) NOT NULL,
+  description TEXT,
+  amount_paise BIGINT NOT NULL,
+  receipt_file_id VARCHAR(32),
+  status VARCHAR(32) NOT NULL DEFAULT 'PENDING',
+  reviewed_by VARCHAR(32),
+  review_notes TEXT,
+  reviewed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_budgets_org_project ON project_budgets(org_id, project_id);
+CREATE INDEX IF NOT EXISTS idx_expenses_org_project ON expenses(org_id, project_id);
+CREATE INDEX IF NOT EXISTS idx_claims_org_project ON reimbursement_claims(org_id, project_id);

@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthedRequest } from '../middlewares/auth';
 import { ProjectService } from '../services/projectService';
+import { FinanceService } from '../services/financeService';
 
 export const GatewayController = {
   getMyContext: async (req: AuthedRequest, res: Response) => {
@@ -192,6 +193,77 @@ export const GatewayController = {
       req.auth!,
       String(req.params.projectId),
       String(req.params.fileId),
+    );
+    res.json(result);
+  },
+  deleteFile: async (req: AuthedRequest, res: Response) => {
+    const result = await ProjectService.deleteFile(
+      req.auth!,
+      String(req.params.projectId),
+      String(req.params.fileId),
+    );
+    res.json(result);
+  },
+  listEvidence: async (req: AuthedRequest, res: Response) => {
+    const data = await ProjectService.listEvidence(req.auth!, {
+      projectId: req.query.projectId ? String(req.query.projectId) : undefined,
+      type: req.query.type ? String(req.query.type) : undefined,
+    });
+    res.json(data);
+  },
+  getAnalytics: async (req: AuthedRequest, res: Response) => {
+    const data = await ProjectService.getEfficiencyAnalytics(req.auth!);
+    res.json(data);
+  },
+  listActivity: async (req: AuthedRequest, res: Response) => {
+    const activity = await ProjectService.listActivity(req.auth!);
+    res.json({ activity });
+  },
+  getInbox: async (req: AuthedRequest, res: Response) => {
+    const inbox = await ProjectService.getInbox(req.auth!);
+    res.json(inbox);
+  },
+  getFinanceOverview: async (req: AuthedRequest, res: Response) => {
+    const overview = await FinanceService.getOverview(req.auth!);
+    res.json(overview);
+  },
+  listBudgets: async (req: AuthedRequest, res: Response) => {
+    const budgets = await FinanceService.listBudgets(req.auth!);
+    res.json({ budgets });
+  },
+  upsertBudget: async (req: AuthedRequest, res: Response) => {
+    const budget = await FinanceService.upsertBudget(req.auth!, req.body);
+    res.status(201).json({ budget });
+  },
+  listExpenses: async (req: AuthedRequest, res: Response) => {
+    const expenses = await FinanceService.listExpenses(
+      req.auth!,
+      req.query.projectId ? String(req.query.projectId) : undefined,
+    );
+    res.json({ expenses });
+  },
+  createExpense: async (req: AuthedRequest, res: Response) => {
+    const expense = await FinanceService.createExpense(req.auth!, req.body, req.file);
+    res.status(201).json({ expense });
+  },
+  markExpensePaid: async (req: AuthedRequest, res: Response) => {
+    const result = await FinanceService.markExpensePaid(req.auth!, String(req.params.expenseId));
+    res.json(result);
+  },
+  listReimbursements: async (req: AuthedRequest, res: Response) => {
+    const claims = await FinanceService.listReimbursements(req.auth!);
+    res.json({ claims });
+  },
+  createReimbursement: async (req: AuthedRequest, res: Response) => {
+    const claim = await FinanceService.createReimbursement(req.auth!, req.body, req.file);
+    res.status(201).json({ claim });
+  },
+  reviewReimbursement: async (req: AuthedRequest, res: Response) => {
+    const result = await FinanceService.reviewReimbursement(
+      req.auth!,
+      String(req.params.claimId),
+      req.body.status,
+      req.body.reviewNotes,
     );
     res.json(result);
   },

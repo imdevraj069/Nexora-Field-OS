@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { useWorkspaceAuth } from '@/hooks/useWorkspaceAuth';
 import { apiRequest } from '@/services/nexoraClient';
+import { VoiceRecorderInput } from '@/components/ui/VoiceRecorderInput';
 
 interface ChecklistItem {
   id: string;
@@ -373,6 +374,12 @@ export default function TaskExecutionView() {
                 rows={3}
                 className="w-full rounded-xl border border-white/[0.08] bg-[#18181b] p-2.5 text-xs text-white placeholder-zinc-500 focus:border-orange-500 focus:outline-none"
               />
+              <div className="mt-2">
+                <VoiceRecorderInput
+                  onAudioCaptured={(file) => setSelectedFile(file)}
+                  onTranscriptUpdate={(t) => setTextNote((prev) => (prev ? `${prev} ${t}` : t))}
+                />
+              </div>
             </div>
           </div>
 

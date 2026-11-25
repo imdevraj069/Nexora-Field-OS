@@ -12,6 +12,10 @@ import {
   Activity,
   ChevronRight,
   ShieldCheck,
+  Sparkles,
+  AlertTriangle,
+  Mic,
+  Wallet,
 } from 'lucide-react';
 import { PERMISSION_FLAGS } from '@nexora/shared-types';
 import { useWorkspaceAuth } from '@/hooks/useWorkspaceAuth';
@@ -21,33 +25,18 @@ import { apiRequest } from '@/services/nexoraClient';
 import { ProjectCreateModal } from '@/components/modals/ProjectCreateModal';
 import { RevealInView, AnimatedRing, MARLO_EASE } from '@/components/ui/motion';
 
-interface ProjectRow {
-  projectId: string;
-  title: string;
-  status: string;
-  stagesCount: number;
-  tasksCount: number;
-  completedTasksCount: number;
-}
-
-interface TaskRow {
-  taskId: string;
-  projectId: string;
-  title: string;
-  status: string;
-  stageName?: string;
-  projectTitle?: string;
-  deadline?: string | null;
-  checklist?: Array<{ completed: boolean }>;
-}
-
 export default function TenantDashboardPage() {
   const { user, activeOrg, token } = useWorkspaceAuth();
   const { permissions, roleName } = useAuthStore();
   const { openTaskDrawer, refreshTick } = useDrawerStore();
-  const [projects, setProjects] = useState<ProjectRow[]>([]);
-  const [tasks, setTasks] = useState<TaskRow[]>([]);
-  const [myTasks, setMyTasks] = useState<TaskRow[]>([]);
+
+  const [projects, setProjects] = useState<any[]>([]);
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [myTasks, setMyTasks] = useState<any[]>([]);
+  const [evidence, setEvidence] = useState<any[]>([]);
+  const [activity, setActivity] = useState<any[]>([]);
+  const [analytics, setAnalytics] = useState<any>(null);
+  const [finance, setFinance] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showCreateProject, setShowCreateProject] = useState(false);
 
@@ -63,16 +52,22 @@ export default function TenantDashboardPage() {
     if (!token || !activeOrg) return;
     setLoading(true);
     try {
-      const [pRes, tRes, myRes] = await Promise.all([
-        apiRequest<{ projects: ProjectRow[] }>('/api/v1/projects', {}, token),
-        apiRequest<{ tasks: TaskRow[] }>('/api/v1/tasks', {}, token),
-        apiRequest<{ tasks: TaskRow[] }>('/api/v1/tasks/my-assigned', {}, token),
+      const [pRes, tRes, myRes, evRes, actRes, anRes, finRes] = await Promise.all([
+        apiRequest<{ projects: any[] }>('/api/v1/projects', {}, token).catch(() => ({ projects: [] })),
+        apiRequest<{ tasks: any[] }>('/api/v1/tasks', {}, token).catch(() => ({ tasks: [] })),
+        apiRequest<{ tasks: any[] }>('/api/v1/tasks/my-assigned', {}, token).catch(() => ({ tasks: [] })),
+        apiRequest<{ files: any[] }>('/api/v1/evidence', {}, token).catch(() => ({ files: [] })),
+        apiRequest<{ activity: any[] }>('/api/v1/activity', {}, token).catch(() => ({ activity: [] })),
+        apiRequest<any>('/api/v1/analytics/efficiency', {}, token).catch(() => null),
+        apiRequest<any>('/api/v1/finance/overview', {}, token).catch(() => null),
       ]);
       setProjects(pRes.projects || []);
       setTasks(tRes.tasks || []);
       setMyTasks(myRes.tasks || []);
-    } catch (e) {
-      console.error('Dashboard load failed:', e);
+      setEvidence(evRes.files || []);
+      setActivity(actRes.activity || []);
+      setAnalytics(anRes);
+      setFinance(finRes);
     } finally {
       setLoading(false);
     }
@@ -89,8 +84,14 @@ export default function TenantDashboardPage() {
   ).length;
   const completionPct = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
 
+  const now = Date.now();
+  const slaAlerts = activeSourceTasks.filter((t) => {
+    if (!t.deadline || ['DONE', 'COMPLETED', 'VERIFIED'].includes(t.status)) return false;
+    return new Date(t.deadline).getTime() - now < 48 * 3600 * 1000;
+  });
+
   const statusGroups = [
-    { label: 'OPEN', count: activeSourceTasks.filter((t) => t.status === 'TODO').length, tone: 'bg-zinc-600' },
+    { label: 'OPEN', count: activeSourceTasks.filter((t) => t.status === 'TODO').length, tone: 'bg-zinc-500' },
     {
       label: 'ACTIVE',
       count: activeSourceTasks.filter((t) => !['TODO', 'DONE', 'COMPLETED', 'VERIFIED'].includes(t.status)).length,
@@ -104,15 +105,13 @@ export default function TenantDashboardPage() {
   ];
   const maxBar = Math.max(1, ...statusGroups.map((b) => b.count));
 
-  const verificationQueue = tasks.filter((t) => ['SUBMITTED', 'IN_REVIEW'].includes(t.status));
-
   return (
     <div className="space-y-5">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-white">
-            Operations Overview
+            Operations Command
           </h1>
           <p className="mt-0.5 text-xs text-zinc-400">
             Welcome, <span className="text-zinc-200 font-semibold">{user?.fullName || 'User'}</span> ·{' '}
@@ -120,58 +119,104 @@ export default function TenantDashboardPage() {
           </p>
         </div>
 
-        {canCreateProject && (
-          <button
-            onClick={() => setShowCreateProject(true)}
-            className="flex items-center gap-2 rounded-full bg-gradient-to-r from-red-600 via-orange-600 to-orange-500 px-5 py-2.5 text-xs font-semibold text-white shadow-lg shadow-orange-950/40 hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer"
+        <div className="flex items-center gap-2.5">
+          <Link
+            href="/finance"
+            className="hidden sm:flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-[#121215] px-4 py-2 text-xs font-semibold text-zinc-200 hover:border-orange-500/40"
           >
-            <Plus size={14} /> New Project
-          </button>
-        )}
+            <Wallet size={13} className="text-orange-400" />
+            ₹{((finance?.totalAllocatedPaise || 0) / 100).toLocaleString('en-IN')} Budget
+          </Link>
+          {canCreateProject && (
+            <button
+              onClick={() => setShowCreateProject(true)}
+              className="flex items-center gap-2 rounded-full bg-gradient-to-r from-red-600 via-orange-600 to-orange-500 px-5 py-2.5 text-xs font-semibold text-white shadow-lg shadow-orange-950/30 hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer"
+            >
+              <Plus size={14} /> New Project
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Role-Based Asymmetric Overview Grid */}
+      {/* Widget 1: Top 4 KPI Strip */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <RevealInView className="rounded-[22px] border border-white/[0.07] bg-[#121215]/95 p-4 flex items-center justify-between">
+          <div>
+            <span className="text-[10px] font-mono uppercase text-zinc-500">Active Projects</span>
+            <p className="font-display text-2xl font-bold text-white mt-1 tabular-nums">{projects.length}</p>
+            <span className="text-[11px] text-zinc-400">Across org shard</span>
+          </div>
+          <div className="h-10 w-10 rounded-xl bg-orange-500/10 border border-orange-500/20 grid place-items-center text-orange-400">
+            <FolderKanban size={18} />
+          </div>
+        </RevealInView>
+
+        <RevealInView delay={0.04} className="rounded-[22px] border border-white/[0.07] bg-[#121215]/95 p-4 flex items-center justify-between">
+          <div>
+            <span className="text-[10px] font-mono uppercase text-zinc-500">Task Velocity</span>
+            <p className="font-display text-2xl font-bold text-white mt-1 tabular-nums">{doneTasks}/{totalTasks}</p>
+            <span className="text-[11px] text-emerald-400">{completionPct}% completed</span>
+          </div>
+          <AnimatedRing percent={completionPct} size={48} strokeWidth={5} />
+        </RevealInView>
+
+        <RevealInView delay={0.08} className="rounded-[22px] border border-white/[0.07] bg-[#121215]/95 p-4 flex items-center justify-between">
+          <div>
+            <span className="text-[10px] font-mono uppercase text-zinc-500">SLA Risk Radar</span>
+            <p className="font-display text-2xl font-bold text-orange-400 mt-1 tabular-nums">{slaAlerts.length}</p>
+            <span className="text-[11px] text-zinc-400">Due &lt;48h / overdue</span>
+          </div>
+          <div className="h-10 w-10 rounded-xl bg-amber-500/10 border border-amber-500/20 grid place-items-center text-amber-500">
+            <AlertTriangle size={18} />
+          </div>
+        </RevealInView>
+
+        <RevealInView delay={0.12} className="rounded-[22px] border border-white/[0.07] bg-[#121215]/95 p-4 flex items-center justify-between">
+          <div>
+            <span className="text-[10px] font-mono uppercase text-zinc-500">AI Governance</span>
+            <p className="font-display text-2xl font-bold text-white mt-1 tabular-nums">
+              {analytics?.avgEfficiency ?? 0}%
+            </p>
+            <span className="text-[11px] text-zinc-400">{evidence.length} proofs indexed</span>
+          </div>
+          <div className="h-10 w-10 rounded-xl bg-rose-500/10 border border-rose-500/20 grid place-items-center text-rose-500">
+            <Sparkles size={18} />
+          </div>
+        </RevealInView>
+      </div>
+
+      {/* Main 2-Column Asymmetric Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-[1.75fr_minmax(320px,1fr)] gap-4 items-start">
         <div className="space-y-4 min-w-0">
-          {/* Org-Wide / Manager Project Capacity Section */}
+          {/* Widget 2: Project Capacity & Stage Progress */}
           {canViewAllProjects && (
             <RevealInView className="rounded-[22px] border border-white/[0.07] bg-[#121215]/95 p-5 shadow-xl">
-              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h2 className="font-display text-base font-bold text-white">Project Capacity & Progress</h2>
-                  <p className="text-xs text-zinc-500">Live segmented task delivery across active projects</p>
+                  <h2 className="font-display text-base font-bold text-white">Project Capacity & Milestones</h2>
+                  <p className="text-xs text-zinc-500">Segmented task completion across sites</p>
                 </div>
-                <Link href="/projects" className="text-xs text-orange-400 hover:text-orange-300 flex items-center gap-1">
+                <Link href="/projects" className="text-xs text-orange-400 hover:underline flex items-center gap-1">
                   All Projects <ArrowRight size={12} />
                 </Link>
               </div>
-
               {loading ? (
-                <div className="py-10 text-center text-xs text-zinc-500">Loading telemetry…</div>
+                <p className="py-8 text-center text-xs text-zinc-500">Loading projects…</p>
               ) : projects.length === 0 ? (
-                <div className="py-10 text-center text-xs text-zinc-500">No projects yet.</div>
+                <p className="py-8 text-center text-xs text-zinc-500">No projects created yet.</p>
               ) : (
                 <div className="divide-y divide-white/[0.05]">
                   {projects.slice(0, 5).map((p, idx) => {
                     const total = Math.max(p.tasksCount, 1);
                     const donePct = Math.round((p.completedTasksCount / total) * 100);
-                    const waitPct = 100 - donePct;
                     return (
-                      <div key={p.projectId} className="grid grid-cols-1 sm:grid-cols-[180px_76px_1fr_34px] items-center gap-3 py-3.5 first:pt-1 last:pb-1">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#1a1a1f] border border-white/[0.06] text-orange-400">
-                            <FolderKanban size={15} />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-semibold text-zinc-100 truncate">{p.title}</p>
-                            <p className="text-[10px] font-mono text-zinc-500">{p.stagesCount} milestones</p>
-                          </div>
+                      <div key={p.projectId} className="grid grid-cols-1 sm:grid-cols-[180px_70px_1fr_34px] items-center gap-3 py-3 first:pt-1 last:pb-1">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-white truncate">{p.title}</p>
+                          <p className="text-[10px] font-mono text-zinc-500">{p.stagesCount} stages</p>
                         </div>
-                        <div className="flex flex-col leading-tight">
-                          <span className="font-display text-xl font-bold text-white tabular-nums">{p.tasksCount}</span>
-                          <small className="text-[10px] font-mono text-zinc-500">tasks</small>
-                        </div>
-                        <div className="flex h-9 gap-1.5 min-w-0">
+                        <span className="font-display text-lg font-bold text-white tabular-nums">{p.tasksCount} tasks</span>
+                        <div className="flex h-8 gap-1.5">
                           {p.completedTasksCount > 0 && (
                             <motion.div
                               initial={{ scaleX: 0 }}
@@ -179,21 +224,14 @@ export default function TenantDashboardPage() {
                               viewport={{ once: false, amount: 0.2 }}
                               transition={{ duration: 0.85, delay: idx * 0.05, ease: MARLO_EASE }}
                               style={{ width: `${Math.max(18, donePct)}%`, transformOrigin: 'left' }}
-                              className="flex items-center justify-end rounded-full bg-zinc-100 px-3 text-xs font-bold text-zinc-900 tabular-nums"
+                              className="flex items-center justify-end rounded-full bg-zinc-900 px-3 text-xs font-bold text-white tabular-nums"
                             >
                               {p.completedTasksCount}
                             </motion.div>
                           )}
-                          <motion.div
-                            initial={{ scaleX: 0 }}
-                            whileInView={{ scaleX: 1 }}
-                            viewport={{ once: false, amount: 0.2 }}
-                            transition={{ duration: 0.85, delay: 0.1 + idx * 0.05, ease: MARLO_EASE }}
-                            style={{ width: `${Math.max(20, waitPct)}%`, transformOrigin: 'left' }}
-                            className="flex flex-1 items-center justify-end rounded-full bg-[#242429] px-3 text-xs font-semibold text-zinc-300 tabular-nums"
-                          >
+                          <div className="flex flex-1 items-center justify-end rounded-full bg-[#242429] px-3 text-xs font-semibold text-zinc-400 tabular-nums">
                             {p.tasksCount - p.completedTasksCount}
-                          </motion.div>
+                          </div>
                         </div>
                         <Link href={`/projects/${p.projectId}`} className="grid h-8 w-8 place-items-center rounded-full border border-white/[0.08] text-zinc-400 hover:text-orange-400">
                           <ChevronRight size={14} />
@@ -206,51 +244,59 @@ export default function TenantDashboardPage() {
             </RevealInView>
           )}
 
-          {/* Verifier / QA Queue Section */}
-          {canVerify && verificationQueue.length > 0 && (
-            <RevealInView delay={0.04} className="rounded-[22px] border border-orange-500/25 bg-[#151214] p-5 shadow-xl">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="font-display text-base font-bold text-white flex items-center gap-2">
-                  <ShieldCheck size={16} className="text-orange-400" />
-                  Pending Verification Queue ({verificationQueue.length})
-                </h2>
-              </div>
-              <div className="space-y-2">
-                {verificationQueue.slice(0, 5).map((t) => (
-                  <button
-                    key={t.taskId}
-                    onClick={() => openTaskDrawer(t.taskId, t.projectId)}
-                    className="w-full text-left flex items-center justify-between rounded-2xl border border-white/[0.06] bg-[#1a1a20] p-3 hover:border-orange-500/40 cursor-pointer"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold text-white truncate">{t.title}</p>
-                      <p className="text-[10px] font-mono text-zinc-500">{t.projectTitle} · {t.stageName}</p>
+          {/* Widget 3: Recent Field Evidence & Voice-to-Text Feed */}
+          <RevealInView delay={0.05} className="rounded-[22px] border border-white/[0.07] bg-[#121215]/95 p-5 shadow-xl">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-display text-base font-bold text-white flex items-center gap-2">
+                <Mic size={16} className="text-orange-400" />
+                Recent Evidence & Voice Transcripts
+              </h2>
+              <Link href="/evidence" className="text-xs text-orange-400 hover:underline flex items-center gap-1">
+                Media Directory <ArrowRight size={12} />
+              </Link>
+            </div>
+            {evidence.length === 0 ? (
+              <p className="py-6 text-center text-xs text-zinc-500">No field media uploaded yet.</p>
+            ) : (
+              <div className="space-y-2.5">
+                {evidence.slice(0, 4).map((ev) => (
+                  <div key={ev.fileId} className="rounded-2xl border border-white/[0.05] bg-[#18181c] p-3 text-xs space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-white truncate">{ev.taskTitle || ev.projectTitle}</span>
+                      <span className="font-mono text-[10px] text-orange-400">{ev.mimeType}</span>
                     </div>
-                    <span className="rounded-full bg-orange-500/15 px-2.5 py-0.5 font-mono text-[10px] text-orange-300">
-                      Review
-                    </span>
-                  </button>
+                    {ev.audioTranscript && (
+                      <p className="text-[11px] italic text-zinc-400 line-clamp-2">&ldquo;{ev.audioTranscript}&rdquo;</p>
+                    )}
+                    {ev.identifiedLanguages?.length > 0 && (
+                      <div className="flex gap-1 pt-0.5">
+                        {ev.identifiedLanguages.map((l: string) => (
+                          <span key={l} className="rounded-full bg-sky-500/15 px-2 py-0.5 font-mono text-[9px] text-sky-400">
+                            {l}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 ))}
               </div>
-            </RevealInView>
-          )}
+            )}
+          </RevealInView>
 
-          {/* Productivity Pulse */}
-          <RevealInView delay={0.06} className="rounded-[22px] border border-white/[0.07] bg-[#121215]/95 p-5 shadow-xl">
-            <div className="flex items-center justify-between mb-5">
-              <div className="flex items-center gap-2">
+          {/* Widget 4: Pipeline Pulse */}
+          <RevealInView delay={0.08} className="rounded-[22px] border border-white/[0.07] bg-[#121215]/95 p-5 shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-display text-base font-bold text-white flex items-center gap-2">
                 <Activity size={16} className="text-orange-400" />
-                <h2 className="font-display text-base font-bold text-white">
-                  {canViewAllProjects ? 'Organization Task Pulse' : 'My Execution Pulse'}
-                </h2>
-              </div>
+                Pipeline Velocity
+              </h2>
               <span className="font-mono text-xs text-zinc-400 tabular-nums">{totalTasks} tasks</span>
             </div>
-            <div className="grid grid-cols-3 gap-4 h-36 items-end pt-4">
+            <div className="grid grid-cols-3 gap-4 h-32 items-end pt-2">
               {statusGroups.map((bar, i) => (
-                <div key={bar.label} className="flex flex-col items-center h-full justify-end gap-2">
-                  <span className="font-mono text-xs font-bold text-zinc-200 tabular-nums">{bar.count}</span>
-                  <div className="w-full max-w-[60px] flex-1 flex items-end rounded-xl bg-[#1a1a1f] p-1">
+                <div key={bar.label} className="flex flex-col items-center h-full justify-end gap-1.5">
+                  <span className="font-mono text-xs font-bold text-white tabular-nums">{bar.count}</span>
+                  <div className="w-full max-w-[56px] flex-1 flex items-end rounded-xl bg-[#1a1a1f] p-1">
                     <motion.div
                       initial={{ scaleY: 0 }}
                       whileInView={{ scaleY: Math.max(0.08, bar.count / maxBar) }}
@@ -260,7 +306,7 @@ export default function TenantDashboardPage() {
                       className={`w-full h-full rounded-lg ${bar.tone}`}
                     />
                   </div>
-                  <span className="font-mono text-[10px] text-zinc-500 tracking-wider">{bar.label}</span>
+                  <span className="font-mono text-[10px] text-zinc-500">{bar.label}</span>
                 </div>
               ))}
             </div>
@@ -269,55 +315,91 @@ export default function TenantDashboardPage() {
 
         {/* Right Column */}
         <div className="space-y-4 min-w-0">
+          {/* Widget 5: SLA & Deadline Radar */}
           <RevealInView delay={0.08} className="rounded-[22px] border border-white/[0.07] bg-[#121215]/95 p-5 shadow-xl">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="text-xs font-mono uppercase tracking-wider text-zinc-500">Completion Rate</p>
-                <p className="font-display text-3xl font-bold text-white mt-1 tabular-nums">{completionPct}%</p>
-                <p className="text-xs text-zinc-400 mt-1">{doneTasks} of {totalTasks} tasks done</p>
-              </div>
-              <AnimatedRing percent={completionPct} size={68} strokeWidth={6} />
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-display text-base font-bold text-white flex items-center gap-2">
+                <Clock size={15} className="text-orange-400" />
+                SLA & Deadline Radar
+              </h2>
+              <Link href="/calendar" className="text-xs text-orange-400 hover:underline">
+                Schedule
+              </Link>
             </div>
+            {slaAlerts.length === 0 ? (
+              <p className="py-4 text-center text-xs text-zinc-500">All tasks are on schedule.</p>
+            ) : (
+              <div className="space-y-2">
+                {slaAlerts.slice(0, 4).map((t) => (
+                  <button
+                    key={t.taskId}
+                    onClick={() => openTaskDrawer(t.taskId, t.projectId)}
+                    className="w-full text-left flex items-center justify-between rounded-xl border border-amber-500/20 bg-amber-500/5 p-2.5 text-xs hover:border-orange-500/40 cursor-pointer"
+                  >
+                    <span className="font-semibold text-white truncate">{t.title}</span>
+                    <span className="font-mono text-[10px] text-amber-500 shrink-0 ml-2">{t.deadline.slice(0, 10)}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </RevealInView>
 
+          {/* Widget 6: Verification / Field Queue */}
           <RevealInView delay={0.12} className="rounded-[22px] border border-white/[0.07] bg-[#121215]/95 p-5 shadow-xl">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-display text-base font-bold text-white flex items-center gap-2">
-                <CheckSquare size={15} className="text-orange-400" />
+                {canVerify ? <ShieldCheck size={15} className="text-orange-400" /> : <CheckSquare size={15} className="text-orange-400" />}
                 {myTasks.length > 0 ? 'My Field Queue' : 'Up Next'}
               </h2>
-              <Link href="/tasks" className="text-xs text-orange-400 hover:text-orange-300 flex items-center gap-1">
-                All Tasks <ArrowRight size={12} />
+              <Link href="/tasks" className="text-xs text-orange-400 hover:underline">
+                View All
               </Link>
             </div>
-
             {(myTasks.length > 0 ? myTasks : tasks).length === 0 ? (
-              <p className="py-8 text-center text-xs text-zinc-500">No tasks assigned yet.</p>
+              <p className="py-6 text-center text-xs text-zinc-500">No tasks queued yet.</p>
             ) : (
               <div className="space-y-2">
-                {(myTasks.length > 0 ? myTasks : tasks).slice(0, 6).map((t) => {
-                  const chkDone = (t.checklist || []).filter((c) => c.completed).length;
-                  const chkTotal = (t.checklist || []).length;
-                  return (
-                    <button
-                      key={t.taskId}
-                      onClick={() => openTaskDrawer(t.taskId, t.projectId)}
-                      className="w-full text-left flex items-center justify-between gap-3 rounded-2xl border border-white/[0.05] bg-[#18181c] p-3 hover:border-orange-500/35 transition-all cursor-pointer group"
-                    >
-                      <div className="min-w-0">
-                        <p className="text-xs font-semibold text-zinc-100 group-hover:text-orange-300 truncate">{t.title}</p>
-                        <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-500 mt-0.5">
-                          <span className="truncate">{t.projectTitle || t.projectId}</span>
-                          {chkTotal > 0 && <span className="text-orange-400">· {chkDone}/{chkTotal}</span>}
-                          {t.deadline && <span className="flex items-center gap-0.5">· <Clock size={10} /> {t.deadline.slice(0, 10)}</span>}
-                        </div>
-                      </div>
-                      <span className="shrink-0 rounded-full border border-orange-500/25 bg-orange-500/10 px-2.5 py-0.5 text-[10px] font-mono text-orange-300">
-                        {t.status}
-                      </span>
-                    </button>
-                  );
-                })}
+                {(myTasks.length > 0 ? myTasks : tasks).slice(0, 5).map((t) => (
+                  <button
+                    key={t.taskId}
+                    onClick={() => openTaskDrawer(t.taskId, t.projectId)}
+                    className="w-full text-left flex items-center justify-between gap-2 rounded-2xl border border-white/[0.05] bg-[#18181c] p-3 hover:border-orange-500/35 cursor-pointer group"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-white group-hover:text-orange-400 truncate">{t.title}</p>
+                      <p className="text-[10px] font-mono text-zinc-500 truncate">{t.projectTitle}</p>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-orange-500/10 px-2 py-0.5 text-[10px] font-mono text-orange-400">
+                      {t.status}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </RevealInView>
+
+          {/* Widget 7: Live Activity Stream */}
+          <RevealInView delay={0.16} className="rounded-[22px] border border-white/[0.07] bg-[#121215]/95 p-5 shadow-xl">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-display text-base font-bold text-white">Live Activity</h2>
+              <Link href="/activity" className="text-xs text-orange-400 hover:underline">
+                Full Log
+              </Link>
+            </div>
+            {activity.length === 0 ? (
+              <p className="py-4 text-center text-xs text-zinc-500">No transitions logged yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {activity.slice(0, 4).map((a) => (
+                  <div key={a.transition_id} className="flex items-center justify-between text-[11px] border-b border-white/[0.05] pb-2 last:border-0 last:pb-0">
+                    <span className="text-zinc-300 truncate">
+                      <strong>{a.entity_id}</strong> → <span className="font-mono text-orange-400">{a.to_status}</span>
+                    </span>
+                    <span className="font-mono text-[10px] text-zinc-500 shrink-0 ml-2">
+                      {new Date(a.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                ))}
               </div>
             )}
           </RevealInView>

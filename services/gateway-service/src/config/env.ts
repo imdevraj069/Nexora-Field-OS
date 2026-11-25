@@ -5,6 +5,7 @@ export const gatewayEnv = {
   port: Number(process.env.API_GATEWAY_PORT ?? 4000),
   storageHttpUrl: process.env.STORAGE_HTTP_URL ?? 'http://storage-service:4002',
   masterStorageKey: process.env.MASTER_STORAGE_KEY ?? 'dev-master-storage-key',
+  masterReadKey: process.env.MASTER_READ_KEY ?? 'dev-master-read-key',
   identityGrpcUrl: process.env.IDENTITY_GRPC_URL ?? 'identity-service:50051',
   storageGrpcUrl: process.env.STORAGE_GRPC_URL ?? 'storage-service:50052',
   aiGrpcUrl: process.env.AI_GRPC_URL ?? 'ai-governance-service:50053',

@@ -39,4 +39,12 @@ export const StorageController = {
     res.setHeader('Content-Type', mimeType);
     stream.pipe(res);
   },
+
+  internalDelete: async (req: Request, res: Response) => {
+    const fileId = String(req.params.fileId);
+    const projectId = req.header('x-project-id') || 'general';
+    const orgId = req.header('x-org-id')!;
+    const result = await S3Service.deleteProjectFile(orgId, projectId, fileId);
+    res.json(result);
+  },
 };

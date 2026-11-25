@@ -43,5 +43,21 @@ router.post(
   asyncHandler(GatewayController.submitEvidence),
 );
 router.get('/projects/:projectId/files/:fileId/signed-url', authMiddleware, asyncHandler(GatewayController.getSignedUrl));
+router.delete('/projects/:projectId/files/:fileId', authMiddleware, asyncHandler(GatewayController.deleteFile));
+
+router.get('/evidence', authMiddleware, asyncHandler(GatewayController.listEvidence));
+router.get('/analytics/efficiency', authMiddleware, asyncHandler(GatewayController.getAnalytics));
+router.get('/activity', authMiddleware, asyncHandler(GatewayController.listActivity));
+router.get('/inbox', authMiddleware, asyncHandler(GatewayController.getInbox));
+
+router.get('/finance/overview', authMiddleware, asyncHandler(GatewayController.getFinanceOverview));
+router.get('/finance/budgets', authMiddleware, asyncHandler(GatewayController.listBudgets));
+router.post('/finance/budgets', authMiddleware, asyncHandler(GatewayController.upsertBudget));
+router.get('/finance/expenses', authMiddleware, asyncHandler(GatewayController.listExpenses));
+router.post('/finance/expenses', authMiddleware, upload.single('receipt'), asyncHandler(GatewayController.createExpense));
+router.patch('/finance/expenses/:expenseId/pay', authMiddleware, asyncHandler(GatewayController.markExpensePaid));
+router.get('/finance/reimbursements', authMiddleware, asyncHandler(GatewayController.listReimbursements));
+router.post('/finance/reimbursements', authMiddleware, upload.single('receipt'), asyncHandler(GatewayController.createReimbursement));
+router.patch('/finance/reimbursements/:claimId', authMiddleware, asyncHandler(GatewayController.reviewReimbursement));
 
 export default router;
