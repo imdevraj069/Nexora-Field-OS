@@ -56,7 +56,7 @@ function AdminSidebar({ open, onClose }: { open: boolean; onClose: () => void })
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-20 bg-black/60 backdrop-blur-sm lg:hidden"
+            className="fixed inset-0 z-20 bg-black/70 backdrop-blur-sm lg:hidden"
             onClick={onClose}
           />
         )}
@@ -67,19 +67,21 @@ function AdminSidebar({ open, onClose }: { open: boolean; onClose: () => void })
         initial={false}
         animate={{ x: open ? 0 : '-100%' }}
         transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-        className="fixed inset-y-0 left-0 z-30 flex w-64 flex-col border-r border-white/[0.07] bg-[#0b0f1a] lg:static lg:translate-x-0 lg:z-auto"
+        className="fixed inset-y-0 left-0 z-30 flex w-64 flex-col border-r border-white/[0.06] bg-[#0c0c0e] lg:static lg:translate-x-0 lg:z-auto"
         style={{ transform: undefined }}
       >
         {/* Logo */}
-        <div className="flex items-center gap-3 px-5 py-5 border-b border-white/[0.07]">
-          <NexoraMark className="h-7 w-7 text-emerald-400" />
+        <div className="flex items-center gap-3 px-5 py-5 border-b border-white/[0.06]">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-red-600/20 via-orange-500/20 to-amber-500/10 border border-orange-500/30 shadow-inner">
+            <NexoraMark className="h-5 w-5 text-orange-400" />
+          </div>
           <div>
-            <p className="font-display text-sm font-semibold text-white leading-tight">Nexora</p>
-            <p className="text-[10px] font-mono text-emerald-400/70 tracking-widest uppercase">Platform Admin</p>
+            <p className="font-display text-sm font-bold text-white leading-tight">Nexora</p>
+            <p className="text-[10px] font-mono text-orange-400/80 tracking-widest uppercase">Field OS</p>
           </div>
           <button
             onClick={onClose}
-            className="ml-auto rounded-lg p-1 text-slate-400 hover:text-white lg:hidden transition-colors"
+            className="ml-auto rounded-lg p-1 text-zinc-400 hover:text-white lg:hidden transition-colors"
             aria-label="Close sidebar"
           >
             <X size={16} />
@@ -87,7 +89,7 @@ function AdminSidebar({ open, onClose }: { open: boolean; onClose: () => void })
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
+        <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
           {NAV.map(({ href, label, Icon }) => {
             const active = isActive(href);
             return (
@@ -95,41 +97,41 @@ function AdminSidebar({ open, onClose }: { open: boolean; onClose: () => void })
                 key={href}
                 href={href}
                 onClick={onClose}
-                className={`group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150 cursor-pointer
+                className={`group relative flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-all duration-150 cursor-pointer
                   ${active
                     ? 'text-white'
-                    : 'text-slate-400 hover:text-slate-100 hover:bg-white/[0.04]'
+                    : 'text-zinc-400 hover:text-zinc-100 hover:bg-white/[0.04]'
                   }`}
               >
                 {active && (
                   <motion.div
                     layoutId="sidebar-active"
-                    className="absolute inset-0 rounded-xl bg-emerald-500/10 border border-emerald-500/20"
+                    className="absolute inset-0 rounded-xl bg-gradient-to-r from-red-500/15 via-orange-500/15 to-orange-500/5 border border-orange-500/30"
                     transition={{ type: 'spring', stiffness: 400, damping: 35 }}
                   />
                 )}
-                <Icon size={16} className={active ? 'text-emerald-400 relative z-10' : 'relative z-10'} />
+                <Icon size={17} className={active ? 'text-orange-400 relative z-10' : 'relative z-10 text-zinc-400 group-hover:text-zinc-200'} />
                 <span className="relative z-10">{label}</span>
-                {active && <ChevronRight size={12} className="ml-auto relative z-10 text-emerald-400" />}
+                {active && <ChevronRight size={13} className="ml-auto relative z-10 text-orange-400" />}
               </Link>
             );
           })}
         </nav>
 
         {/* Footer */}
-        <div className="border-t border-white/[0.07] p-4 space-y-3">
+        <div className="border-t border-white/[0.06] p-4 space-y-3">
           <div className="flex items-center gap-3 px-1">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500/15 border border-emerald-500/30">
-              <ShieldCheck size={14} className="text-emerald-400" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-500/15 border border-orange-500/30">
+              <ShieldCheck size={15} className="text-orange-400" />
             </div>
             <div>
-              <p className="text-xs font-semibold text-slate-100">devraj</p>
-              <p className="text-[10px] font-mono text-emerald-400/70">PLATFORM_SUPERADMIN</p>
+              <p className="text-xs font-semibold text-zinc-200">devraj</p>
+              <p className="text-[10px] font-mono text-orange-400/80">SUPERADMIN</p>
             </div>
           </div>
           <button
             onClick={logout}
-            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-400 hover:text-red-400 hover:bg-red-500/[0.06] transition-all duration-150 cursor-pointer"
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-zinc-400 hover:text-red-400 hover:bg-red-500/[0.08] transition-all duration-150 cursor-pointer"
           >
             <LogOut size={15} />
             Sign out
@@ -144,38 +146,35 @@ function AdminSidebar({ open, onClose }: { open: boolean; onClose: () => void })
 function TopBar({ onMenuOpen }: { onMenuOpen: () => void }) {
   const pathname = usePathname();
 
-  // Build breadcrumb from pathname
   const segments = pathname.replace('/admin', '').split('/').filter(Boolean);
   const crumbs = [{ label: 'Admin', href: '/admin/dashboard' }];
   let path = '/admin';
   for (const seg of segments) {
     path += `/${seg}`;
-    // humanize segment
     const label = seg.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-    // skip UUIDs
     if (seg.length > 20 && !seg.includes('-')) continue;
     crumbs.push({ label, href: path });
   }
 
   return (
-    <header className="sticky top-0 z-10 flex h-14 items-center gap-4 border-b border-white/[0.07] bg-[#080a0f]/80 backdrop-blur-md px-4 lg:px-6">
+    <header className="sticky top-0 z-10 flex h-14 items-center gap-4 border-b border-white/[0.06] bg-[#09090b]/80 backdrop-blur-md px-4 lg:px-6">
       <button
         onClick={onMenuOpen}
-        className="rounded-lg p-1.5 text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors lg:hidden cursor-pointer"
+        className="rounded-lg p-1.5 text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors lg:hidden cursor-pointer"
         aria-label="Open menu"
       >
         <Menu size={18} />
       </button>
 
       {/* Breadcrumb */}
-      <nav aria-label="Breadcrumb" className="flex items-center gap-1 text-xs text-slate-500">
+      <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-zinc-500">
         {crumbs.map((c, i) => (
           <React.Fragment key={c.href}>
-            {i > 0 && <ChevronRight size={12} className="shrink-0" />}
+            {i > 0 && <ChevronRight size={12} className="shrink-0 text-zinc-600" />}
             {i === crumbs.length - 1 ? (
-              <span className="text-slate-200 font-medium">{c.label}</span>
+              <span className="text-zinc-200 font-medium">{c.label}</span>
             ) : (
-              <Link href={c.href} className="hover:text-slate-300 transition-colors cursor-pointer">
+              <Link href={c.href} className="hover:text-zinc-300 transition-colors cursor-pointer">
                 {c.label}
               </Link>
             )}
@@ -183,11 +182,11 @@ function TopBar({ onMenuOpen }: { onMenuOpen: () => void }) {
         ))}
       </nav>
 
-      {/* Right side */}
+      {/* Right side status indicator */}
       <div className="ml-auto flex items-center gap-2">
-        <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-mono text-emerald-400">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-          LIVE
+        <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-orange-500/30 bg-orange-500/10 px-2.5 py-1 text-[11px] font-mono text-orange-300">
+          <span className="h-1.5 w-1.5 rounded-full bg-orange-400 animate-pulse" />
+          SYSTEM ONLINE
         </span>
       </div>
     </header>
@@ -221,7 +220,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     if (saved) setTokenState(saved);
   }, []);
 
-  // Redirect logic after mount
   useEffect(() => {
     if (!mounted) return;
     const isLoginPage = pathname === '/admin';
@@ -234,7 +232,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   if (!mounted) return null;
 
-  // Show login page without shell
   const isLoginPage = pathname === '/admin';
   if (isLoginPage) {
     return (
@@ -248,18 +245,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   return (
     <AuthContext.Provider value={{ token, setToken, logout }}>
-      <div className="flex h-screen overflow-hidden bg-[#080a0f]">
-        {/* Sidebar - desktop always visible */}
+      <div className="flex h-screen overflow-hidden bg-[#09090b]">
+        {/* Desktop sidebar */}
         <div className="hidden lg:flex">
           <AdminSidebar open={true} onClose={() => {}} />
         </div>
-        {/* Sidebar - mobile drawer */}
+        {/* Mobile sidebar */}
         <AdminSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-        {/* Main */}
+        {/* Content canvas */}
         <div className="flex flex-1 flex-col overflow-hidden min-w-0">
           <TopBar onMenuOpen={() => setSidebarOpen(true)} />
-          <main className="flex-1 overflow-y-auto p-4 lg:p-6">
+          <main className="flex-1 overflow-y-auto p-4 lg:p-7">
             <AnimatePresence mode="wait">
               <motion.div
                 key={pathname}

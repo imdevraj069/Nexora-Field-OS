@@ -16,7 +16,6 @@ import { useAdminAuth } from '../layout';
 import { apiRequest } from '../../../services/nexoraClient';
 import {
   OrgRow,
-  Card,
   PageHeader,
   ShardBadge,
   Spinner,
@@ -56,11 +55,11 @@ export default function OrganizationsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Organizations"
-        subtitle={`${orgs.length} organizations across the platform`}
+        subtitle={`${orgs.length} organizations managed across platform shards`}
         action={
           <button
             onClick={load}
-            className="flex items-center gap-2 rounded-xl border border-white/[0.08] bg-[#0e121a] px-3.5 py-2 text-xs font-medium text-slate-300 hover:border-emerald-500/30 hover:text-emerald-300 transition-all cursor-pointer"
+            className="flex items-center gap-2 rounded-xl border border-white/[0.08] bg-[#121215] px-3.5 py-2 text-xs font-medium text-zinc-300 hover:border-orange-500/40 hover:text-orange-300 transition-all cursor-pointer shadow-sm"
           >
             <RefreshCw size={13} />
             Refresh
@@ -70,13 +69,13 @@ export default function OrganizationsPage() {
 
       {/* Search */}
       <div className="relative max-w-sm">
-        <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+        <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
         <input
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by name, ID, industry…"
-          className="w-full rounded-xl border border-white/[0.08] bg-[#0e121a] py-2.5 pl-9 pr-4 text-sm text-slate-100 placeholder-slate-500 outline-none focus:border-emerald-500/40 focus:ring-2 focus:ring-emerald-500/15 transition-all"
+          placeholder="Search by name, ID, or industry…"
+          className="w-full rounded-xl border border-white/[0.08] bg-[#121215] py-2.5 pl-9 pr-4 text-sm text-zinc-100 placeholder-zinc-500 outline-none focus:border-orange-500/50 focus:ring-2 focus:ring-orange-500/15 transition-all"
         />
       </div>
 
@@ -94,13 +93,13 @@ export default function OrganizationsPage() {
       ) : filtered.length === 0 ? (
         <EmptyState message={search ? 'No organizations match your search.' : 'No organizations found.'} />
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-3">
           {filtered.map((org, i) => (
             <motion.div
               key={org.orgId}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.04 }}
+              transition={{ delay: i * 0.03 }}
             >
               <OrgCard org={org} />
             </motion.div>
@@ -115,21 +114,21 @@ function OrgCard({ org }: { org: OrgRow }) {
   return (
     <Link
       href={`/admin/organizations/${org.orgId}`}
-      className="group block rounded-2xl border border-white/[0.07] bg-[#0e121a] p-5 hover:border-emerald-500/25 hover:bg-[#0e121a]/80 transition-all duration-200 cursor-pointer"
+      className="group block rounded-2xl border border-white/[0.06] bg-[#121215]/90 p-5 hover:border-orange-500/35 hover:bg-[#151519] transition-all duration-200 cursor-pointer shadow-lg shadow-black/20"
     >
       {/* Header row */}
-      <div className="flex items-start justify-between mb-4">
+      <div className="flex items-start justify-between mb-3.5">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15 border border-emerald-500/20">
-            <span className="font-display text-sm font-bold text-emerald-400">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-red-600/20 via-orange-500/20 to-amber-500/10 border border-orange-500/30">
+            <span className="font-display text-sm font-bold text-orange-300">
               {org.orgInitials || org.orgName.slice(0, 2).toUpperCase()}
             </span>
           </div>
           <div className="min-w-0">
-            <p className="font-display text-sm font-semibold text-white leading-tight truncate max-w-[140px]">
+            <p className="font-display text-sm font-semibold text-white leading-tight truncate max-w-[150px] group-hover:text-orange-300 transition-colors">
               {org.orgName}
             </p>
-            <p className="text-[11px] font-mono text-slate-500 truncate">{org.orgId}</p>
+            <p className="text-[11px] font-mono text-zinc-500 truncate mt-0.5">{org.orgId}</p>
           </div>
         </div>
         <ShardBadge shard={org.shardId} />
@@ -137,28 +136,28 @@ function OrgCard({ org }: { org: OrgRow }) {
 
       {/* Industry */}
       {org.industryType && (
-        <p className="mb-4 text-xs text-slate-400 flex items-center gap-1.5">
-          <Building2 size={11} />
+        <p className="mb-4 text-xs text-zinc-400 flex items-center gap-1.5">
+          <Building2 size={12} className="text-zinc-500" />
           {org.industryType}
         </p>
       )}
 
       {/* Stats row */}
-      <div className="flex items-center gap-4 text-xs text-slate-500">
+      <div className="flex items-center gap-4 text-xs text-zinc-400 pt-3 border-t border-white/[0.04]">
         <span className="flex items-center gap-1.5">
-          <Users size={11} className="text-slate-600" />
+          <Users size={12} className="text-zinc-500" />
           {org.memberCount}
         </span>
         <span className="flex items-center gap-1.5">
-          <FolderKanban size={11} className="text-slate-600" />
+          <FolderKanban size={12} className="text-zinc-500" />
           {org.projectCount}
         </span>
         <span className="flex items-center gap-1.5">
-          <CheckSquare size={11} className="text-slate-600" />
+          <CheckSquare size={12} className="text-zinc-500" />
           {org.taskCount}
         </span>
-        <span className="ml-auto flex items-center gap-1 text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity">
-          View <ArrowRight size={12} />
+        <span className="ml-auto flex items-center gap-1 text-orange-400 opacity-0 group-hover:opacity-100 transition-opacity font-medium">
+          Manage <ArrowRight size={12} />
         </span>
       </div>
     </Link>

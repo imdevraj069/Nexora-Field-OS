@@ -5,7 +5,6 @@ import { motion, AnimatePresence } from 'motion/react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import {
-  CheckSquare,
   Clock,
   User,
   Zap,
@@ -21,7 +20,6 @@ import { apiRequest } from '../../../../../../services/nexoraClient';
 import {
   OrgDetail,
   Card,
-  ShardBadge,
   StatusBadge,
   Spinner,
   EmptyState,
@@ -53,7 +51,6 @@ export default function ProjectDetailPage() {
       const proj = detail.projects.find((p) => p.projectId === projectId) ?? null;
       setProject(proj);
       if (proj) {
-        // Open all stages by default
         setOpenStages(new Set(proj.stages.map((s) => s.stageId)));
       }
     } catch (err) {
@@ -121,7 +118,6 @@ export default function ProjectDetailPage() {
     }
   }
 
-  // Resolve assignee name from members list
   function resolveUser(userId: string | null): string {
     if (!userId) return '—';
     const member = orgDetail?.members.find((m) => m.userId === userId);
@@ -148,10 +144,10 @@ export default function ProjectDetailPage() {
             initial={{ opacity: 0, y: -16, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className={`fixed top-4 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-medium shadow-xl backdrop-blur-md
+            className={`fixed top-4 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-medium shadow-2xl backdrop-blur-md
               ${toast.kind === 'ok'
-                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
-                : 'border-red-500/30 bg-red-500/10 text-red-300'
+                ? 'border-orange-500/40 bg-orange-950/80 text-orange-200'
+                : 'border-red-500/40 bg-red-950/80 text-red-200'
               }`}
           >
             {toast.text}
@@ -174,54 +170,55 @@ export default function ProjectDetailPage() {
         <EmptyState message="Project not found." />
       ) : (
         <>
-          {/* Back + Header */}
+          {/* Back button */}
           <Link
             href={`/admin/organizations/${orgId}`}
-            className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-emerald-400 transition-colors cursor-pointer mb-1"
+            className="inline-flex items-center gap-1.5 text-xs text-zinc-500 hover:text-orange-400 transition-colors cursor-pointer mb-1"
           >
-            <ArrowLeft size={12} /> Back to org
+            <ArrowLeft size={13} /> Back to Organization
           </Link>
 
-          <Card className="p-5">
+          {/* Project summary card */}
+          <Card className="p-6">
             <div className="flex flex-wrap items-start gap-4">
               <div className="flex-1 min-w-0">
-                <div className="flex flex-wrap items-center gap-2 mb-1">
-                  <h1 className="font-display text-xl font-bold text-white">{project.title}</h1>
+                <div className="flex flex-wrap items-center gap-2.5 mb-1">
+                  <h1 className="font-display text-xl font-bold tracking-tight text-white">{project.title}</h1>
                   <StatusBadge status={project.status} />
                 </div>
                 {project.description && (
-                  <p className="text-sm text-slate-400 mt-1">{project.description}</p>
+                  <p className="text-sm text-zinc-400 mt-1">{project.description}</p>
                 )}
-                <p className="font-mono text-[11px] text-slate-600 mt-1">{project.projectId}</p>
+                <p className="font-mono text-[11px] text-zinc-500 mt-1">{project.projectId}</p>
               </div>
 
-              {/* Completion ring */}
-              <div className="flex items-center gap-4">
-                <div className="relative flex h-16 w-16 items-center justify-center">
+              {/* Progress gauge */}
+              <div className="flex items-center gap-4 bg-[#18181b] border border-white/[0.04] px-4 py-3 rounded-2xl">
+                <div className="relative flex h-14 w-14 items-center justify-center">
                   <svg className="absolute inset-0 h-full w-full -rotate-90" viewBox="0 0 36 36">
-                    <circle cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="3" />
+                    <circle cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="3" />
                     <circle
                       cx="18" cy="18" r="15" fill="none"
-                      stroke="#10b981" strokeWidth="3"
+                      stroke="#f97316" strokeWidth="3"
                       strokeDasharray={`${completionPct * 0.942} 94.2`}
                       strokeLinecap="round"
                     />
                   </svg>
-                  <span className="font-display text-sm font-bold text-emerald-400">{completionPct}%</span>
+                  <span className="font-display text-xs font-bold text-orange-400">{completionPct}%</span>
                 </div>
-                <div className="text-xs text-slate-500">
-                  <p className="text-slate-300 font-medium">{doneTasks}/{totalTasks}</p>
-                  <p>tasks done</p>
+                <div className="text-xs">
+                  <p className="text-zinc-200 font-semibold">{doneTasks} of {totalTasks}</p>
+                  <p className="text-zinc-500">tasks finished</p>
                 </div>
               </div>
 
+              {/* Status override */}
               <div className="flex gap-2 items-start">
-                {/* Status override */}
                 <select
                   aria-label="Override project status"
                   value={project.status}
                   onChange={(e) => void updateProjectStatus(e.target.value)}
-                  className="rounded-xl border border-white/[0.08] bg-[#131924] px-2.5 py-2 text-xs font-mono text-slate-300 outline-none focus:border-emerald-500/40 cursor-pointer"
+                  className="rounded-xl border border-white/[0.08] bg-[#18181b] px-3 py-2 text-xs font-mono text-zinc-300 outline-none focus:border-orange-500/50 cursor-pointer"
                 >
                   {PROJECT_STATUSES.map((s) => (
                     <option key={s} value={s}>{s}</option>
@@ -229,36 +226,36 @@ export default function ProjectDetailPage() {
                 </select>
                 <button
                   onClick={load}
-                  className="flex items-center gap-1.5 rounded-xl border border-white/[0.08] px-3 py-2 text-xs text-slate-400 hover:text-emerald-300 hover:border-emerald-500/30 transition-all cursor-pointer"
+                  className="flex items-center gap-1.5 rounded-xl border border-white/[0.08] px-3 py-2 text-xs text-zinc-400 hover:text-orange-300 hover:border-orange-500/30 transition-all cursor-pointer"
                 >
-                  <RefreshCw size={12} />
+                  <RefreshCw size={13} />
                 </button>
               </div>
             </div>
           </Card>
 
-          {/* Collaborators */}
+          {/* Cross-org collaborators */}
           {project.collaborators.length > 0 && (
             <Card className="p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <Link2 size={14} className="text-violet-400" />
+              <div className="flex items-center gap-2 mb-3.5">
+                <Link2 size={15} className="text-rose-400" />
                 <h2 className="font-display text-sm font-semibold text-white">
-                  Cross-Org Collaborators
+                  Partner Organization Collaborators
                 </h2>
-                <span className="ml-auto font-mono text-xs text-slate-500">{project.collaborators.length}</span>
+                <span className="ml-auto font-mono text-xs text-zinc-500">{project.collaborators.length} active</span>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2.5">
                 {project.collaborators.map((c) => (
                   <div
                     key={`${c.userId}-${c.partnerOrgId}`}
-                    className="flex items-center gap-2 rounded-xl border border-violet-500/20 bg-violet-500/5 px-3 py-2"
+                    className="flex items-center gap-2.5 rounded-xl border border-rose-500/20 bg-rose-500/5 px-3 py-2"
                   >
-                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-violet-500/15 text-[10px] font-bold text-violet-400">
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-rose-500/20 text-[10px] font-bold text-rose-300">
                       {(c.fullName ?? c.userId)[0]?.toUpperCase()}
                     </div>
                     <div>
-                      <p className="text-xs font-medium text-slate-200">{c.fullName || c.userId}</p>
-                      <p className="text-[11px] font-mono text-violet-400/70">{c.roleName} · {c.partnerOrgId}</p>
+                      <p className="text-xs font-medium text-zinc-200">{c.fullName || c.userId}</p>
+                      <p className="text-[10px] font-mono text-rose-300/80">{c.roleName} · {c.partnerOrgId}</p>
                     </div>
                   </div>
                 ))}
@@ -266,18 +263,18 @@ export default function ProjectDetailPage() {
             </Card>
           )}
 
-          {/* Stages / milestones */}
+          {/* Stages & tasks */}
           <div className="space-y-3">
             <div className="flex items-center gap-2">
-              <Layers size={14} className="text-emerald-400" />
+              <Layers size={15} className="text-orange-400" />
               <h2 className="font-display text-sm font-semibold text-white">
-                Milestones & Tasks
+                Execution Milestones & Field Tasks
               </h2>
-              <span className="font-mono text-xs text-slate-500">{project.stages.length} stages</span>
+              <span className="font-mono text-xs text-zinc-500">({project.stages.length} stages)</span>
             </div>
 
             {project.stages.length === 0 ? (
-              <EmptyState message="No stages in this project." />
+              <EmptyState message="No stages defined for this project." />
             ) : (
               [...project.stages]
                 .sort((a, b) => a.orderIndex - b.orderIndex)
@@ -325,24 +322,24 @@ function StageAccordion({
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.06 }}
+      transition={{ delay: index * 0.05 }}
     >
       <Card>
-        {/* Stage header */}
+        {/* Stage bar */}
         <button
           onClick={onToggle}
-          className="flex w-full items-center gap-4 px-5 py-4 text-left cursor-pointer hover:bg-white/[0.015] transition-colors rounded-t-2xl"
+          className="flex w-full items-center gap-4 px-5 py-4 text-left cursor-pointer hover:bg-white/[0.02] transition-colors rounded-t-2xl"
         >
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/10 font-mono text-xs font-bold text-emerald-400">
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-orange-500/30 bg-orange-500/10 font-mono text-xs font-bold text-orange-400">
             {index + 1}
           </div>
           <div className="flex-1 min-w-0">
             <span className="font-display text-sm font-semibold text-white">{stage.name}</span>
-            <span className="ml-3 text-xs text-slate-500">{doneTasks}/{stage.tasks.length} tasks done</span>
+            <span className="ml-3 text-xs text-zinc-500">{doneTasks}/{stage.tasks.length} tasks completed</span>
           </div>
           <div className="flex items-center gap-3 shrink-0">
             {stage.deadline && (
-              <span className="hidden sm:flex items-center gap-1 text-xs text-slate-500">
+              <span className="hidden sm:flex items-center gap-1 text-xs text-zinc-500">
                 <Clock size={11} />
                 {new Date(stage.deadline).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
               </span>
@@ -353,17 +350,17 @@ function StageAccordion({
               value={stage.status}
               onClick={(e) => e.stopPropagation()}
               onChange={(e) => { e.stopPropagation(); onStageStatusChange(e.target.value); }}
-              className="rounded-lg border border-white/[0.08] bg-[#131924] px-2 py-1 text-[11px] font-mono text-slate-400 outline-none cursor-pointer"
+              className="rounded-lg border border-white/[0.08] bg-[#18181b] px-2 py-1 text-[11px] font-mono text-zinc-300 outline-none cursor-pointer"
             >
               {STAGE_STATUSES.map((s) => (
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>
-            {open ? <ChevronDown size={14} className="text-slate-500" /> : <ChevronRight size={14} className="text-slate-500" />}
+            {open ? <ChevronDown size={14} className="text-zinc-500" /> : <ChevronRight size={14} className="text-zinc-500" />}
           </div>
         </button>
 
-        {/* Tasks */}
+        {/* Task listings */}
         <AnimatePresence initial={false}>
           {open && (
             <motion.div
@@ -376,18 +373,18 @@ function StageAccordion({
             >
               {stage.tasks.length === 0 ? (
                 <div className="border-t border-white/[0.05] px-5 py-4">
-                  <EmptyState message="No tasks in this stage." />
+                  <EmptyState message="No tasks assigned in this milestone stage." />
                 </div>
               ) : (
                 <div className="border-t border-white/[0.05]">
                   <table className="w-full text-xs">
                     <thead>
-                      <tr className="border-b border-white/[0.05] text-[11px] text-slate-600 uppercase tracking-wider">
+                      <tr className="border-b border-white/[0.05] text-[11px] text-zinc-500 uppercase tracking-wider">
                         <th className="px-5 py-3 text-left">Task</th>
                         <th className="px-5 py-3 text-left hidden sm:table-cell">Type</th>
                         <th className="px-5 py-3 text-left">Assignee</th>
                         <th className="px-5 py-3 text-left hidden md:table-cell">Deadline</th>
-                        <th className="px-5 py-3 text-left hidden lg:table-cell">AI Score</th>
+                        <th className="px-5 py-3 text-left hidden lg:table-cell">AI Efficiency</th>
                         <th className="px-5 py-3 text-left">Status</th>
                         <th className="px-5 py-3 text-left">Override</th>
                       </tr>
@@ -424,35 +421,35 @@ function TaskRow({
   onStatusChange: (s: string) => void;
 }) {
   return (
-    <tr className="hover:bg-white/[0.015] transition-colors">
+    <tr className="hover:bg-white/[0.02] transition-colors">
       <td className="px-5 py-3">
-        <p className="font-medium text-slate-200">{task.title}</p>
-        <p className="font-mono text-[10px] text-slate-600">{task.taskId}</p>
+        <p className="font-medium text-zinc-200">{task.title}</p>
+        <p className="font-mono text-[10px] text-zinc-500">{task.taskId}</p>
       </td>
       <td className="px-5 py-3 hidden sm:table-cell">
-        <span className="rounded-md bg-[#131924] border border-white/[0.06] px-2 py-0.5 font-mono text-[10px] text-slate-400">
+        <span className="rounded-md bg-[#18181b] border border-white/[0.06] px-2 py-0.5 font-mono text-[10px] text-zinc-400">
           {task.taskType}
         </span>
       </td>
       <td className="px-5 py-3">
         <div className="flex items-center gap-1.5">
-          <User size={10} className="text-slate-600 shrink-0" />
-          <span className="text-slate-300 truncate max-w-[100px]">{assigneeName}</span>
+          <User size={11} className="text-zinc-500 shrink-0" />
+          <span className="text-zinc-300 truncate max-w-[110px]">{assigneeName}</span>
         </div>
       </td>
-      <td className="px-5 py-3 hidden md:table-cell text-slate-500">
+      <td className="px-5 py-3 hidden md:table-cell text-zinc-400 font-mono text-[11px]">
         {task.deadline
           ? new Date(task.deadline).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })
           : '—'}
       </td>
       <td className="px-5 py-3 hidden lg:table-cell">
         {task.efficiencyScore !== null ? (
-          <span className="flex items-center gap-1 text-emerald-400">
-            <Zap size={10} />
+          <span className="flex items-center gap-1 text-orange-400 font-mono text-[11px] font-semibold">
+            <Zap size={11} />
             {task.efficiencyScore}%
           </span>
         ) : (
-          <span className="text-slate-600">—</span>
+          <span className="text-zinc-600">—</span>
         )}
       </td>
       <td className="px-5 py-3">
@@ -463,7 +460,7 @@ function TaskRow({
           aria-label={`Task status ${task.taskId}`}
           value={task.status}
           onChange={(e) => onStatusChange(e.target.value)}
-          className="rounded-lg border border-white/[0.08] bg-[#131924] px-2 py-1 text-[10px] font-mono text-slate-400 outline-none focus:border-emerald-500/40 cursor-pointer"
+          className="rounded-lg border border-white/[0.08] bg-[#18181b] px-2 py-1 text-[11px] font-mono text-zinc-300 outline-none focus:border-orange-500/50 cursor-pointer"
         >
           {TASK_STATUSES.map((s) => (
             <option key={s} value={s}>{s}</option>

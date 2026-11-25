@@ -16,19 +16,17 @@ import {
   Layers,
   Link2,
   Building2,
-  ChevronRight,
+  ArrowLeft,
 } from 'lucide-react';
 import { useAdminAuth } from '../../layout';
 import { apiRequest } from '../../../../services/nexoraClient';
 import {
   OrgDetail,
   Card,
-  PageHeader,
   ShardBadge,
   StatusBadge,
   Spinner,
   EmptyState,
-  TASK_STATUSES,
 } from '../../../../components/admin/shared';
 
 type TabId = 'members' | 'projects' | 'roles';
@@ -103,16 +101,23 @@ export default function OrgDetailPage() {
             initial={{ opacity: 0, y: -16, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className={`fixed top-4 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-medium shadow-xl backdrop-blur-md
+            className={`fixed top-4 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-medium shadow-2xl backdrop-blur-md
               ${toast.kind === 'ok'
-                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
-                : 'border-red-500/30 bg-red-500/10 text-red-300'
+                ? 'border-orange-500/40 bg-orange-950/80 text-orange-200'
+                : 'border-red-500/40 bg-red-950/80 text-red-200'
               }`}
           >
             {toast.text}
           </motion.div>
         )}
       </AnimatePresence>
+
+      <Link
+        href="/admin/organizations"
+        className="inline-flex items-center gap-1.5 text-xs text-zinc-500 hover:text-orange-400 transition-colors cursor-pointer"
+      >
+        <ArrowLeft size={13} /> Back to Organizations
+      </Link>
 
       {loading ? (
         <div className="flex h-64 items-center justify-center">
@@ -128,64 +133,64 @@ export default function OrgDetailPage() {
       ) : detail && org ? (
         <>
           {/* Header card */}
-          <Card className="p-5">
+          <Card className="p-6">
             <div className="flex flex-wrap items-start gap-4">
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/15 border border-emerald-500/20">
-                <span className="font-display text-lg font-bold text-emerald-400">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-tr from-red-600/20 via-orange-500/20 to-amber-500/10 border border-orange-500/30">
+                <span className="font-display text-lg font-bold text-orange-300">
                   {org.name.slice(0, 2).toUpperCase()}
                 </span>
               </div>
               <div className="flex-1 min-w-0">
-                <div className="flex flex-wrap items-center gap-2 mb-1">
-                  <h1 className="font-display text-xl font-bold text-white">{org.name}</h1>
+                <div className="flex flex-wrap items-center gap-2.5 mb-1">
+                  <h1 className="font-display text-xl font-bold tracking-tight text-white">{org.name}</h1>
                   <ShardBadge shard={org.shardId} />
                 </div>
-                <p className="font-mono text-xs text-slate-500">{org.org_id}</p>
+                <p className="font-mono text-xs text-zinc-500">{org.org_id}</p>
                 {org.industry_type && (
-                  <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-400">
-                    <Building2 size={11} />
+                  <p className="mt-1.5 flex items-center gap-1.5 text-xs text-zinc-400">
+                    <Building2 size={12} className="text-zinc-500" />
                     {org.industry_type}
                   </p>
                 )}
               </div>
-              {/* Quick stats */}
-              <div className="flex gap-6 text-center ml-auto">
+              {/* Quick metrics */}
+              <div className="flex gap-7 text-center ml-auto">
                 {[
                   { label: 'Members', value: detail.members.length, icon: Users },
                   { label: 'Projects', value: detail.projects.length, icon: FolderKanban },
                   { label: 'Roles', value: detail.roles.length, icon: Shield },
                 ].map(({ label, value, icon: Icon }) => (
                   <div key={label}>
-                    <p className="font-display text-2xl font-bold text-white">{value}</p>
-                    <p className="text-[11px] text-slate-500 flex items-center gap-1 justify-center mt-0.5">
-                      <Icon size={10} /> {label}
+                    <p className="font-display text-2xl font-bold tracking-tight text-white">{value}</p>
+                    <p className="text-[11px] text-zinc-500 flex items-center gap-1 justify-center mt-1">
+                      <Icon size={11} /> {label}
                     </p>
                   </div>
                 ))}
               </div>
               <button
                 onClick={load}
-                className="flex items-center gap-1.5 self-start rounded-xl border border-white/[0.08] bg-transparent px-3 py-2 text-xs text-slate-400 hover:text-emerald-300 hover:border-emerald-500/30 transition-all cursor-pointer"
+                className="flex items-center gap-1.5 self-start rounded-xl border border-white/[0.08] bg-transparent px-3 py-2 text-xs text-zinc-400 hover:text-orange-300 hover:border-orange-500/40 transition-all cursor-pointer"
               >
                 <RefreshCw size={12} /> Refresh
               </button>
             </div>
           </Card>
 
-          {/* Tabs */}
-          <div className="flex gap-1 rounded-xl border border-white/[0.07] bg-[#0e121a] p-1 w-fit">
+          {/* Navigation tabs */}
+          <div className="flex gap-1 rounded-xl border border-white/[0.06] bg-[#121215] p-1 w-fit shadow-inner">
             {(['members', 'projects', 'roles'] as TabId[]).map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
                 className={`relative rounded-lg px-4 py-2 text-sm font-medium capitalize transition-all cursor-pointer ${
-                  tab === t ? 'text-white' : 'text-slate-500 hover:text-slate-300'
+                  tab === t ? 'text-white' : 'text-zinc-400 hover:text-zinc-200'
                 }`}
               >
                 {tab === t && (
                   <motion.div
                     layoutId="org-tab"
-                    className="absolute inset-0 rounded-lg bg-emerald-500/10 border border-emerald-500/20"
+                    className="absolute inset-0 rounded-lg bg-gradient-to-r from-red-500/20 via-orange-500/20 to-orange-500/10 border border-orange-500/30"
                     transition={{ type: 'spring', stiffness: 400, damping: 35 }}
                   />
                 )}
@@ -194,7 +199,7 @@ export default function OrgDetailPage() {
             ))}
           </div>
 
-          {/* Tab content */}
+          {/* Tab contents */}
           <AnimatePresence mode="wait">
             <motion.div
               key={tab}
@@ -203,7 +208,7 @@ export default function OrgDetailPage() {
               exit={{ opacity: 0, y: -4 }}
               transition={{ duration: 0.15 }}
             >
-              {tab === 'members' && <MembersTab detail={detail} orgId={orgId} onToggle={toggleUserStatus} />}
+              {tab === 'members' && <MembersTab detail={detail} onToggle={toggleUserStatus} />}
               {tab === 'projects' && <ProjectsTab detail={detail} orgId={orgId} onStatusChange={updateProjectStatus} />}
               {tab === 'roles' && <RolesTab detail={detail} />}
             </motion.div>
@@ -217,11 +222,9 @@ export default function OrgDetailPage() {
 // ─── Members Tab ──────────────────────────────────────────────────────────────
 function MembersTab({
   detail,
-  orgId,
   onToggle,
 }: {
   detail: OrgDetail;
-  orgId: string;
   onToggle: (userId: string, current: 'ACTIVE' | 'SUSPENDED') => void;
 }) {
   const [pending, setPending] = useState<string | null>(null);
@@ -232,14 +235,14 @@ function MembersTab({
     setPending(null);
   }
 
-  if (detail.members.length === 0) return <EmptyState message="No members in this organization." />;
+  if (detail.members.length === 0) return <EmptyState message="No members found in this organization." />;
 
   return (
     <Card>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-white/[0.07] text-[11px] text-slate-500 uppercase tracking-wider">
+            <tr className="border-b border-white/[0.06] text-[11px] text-zinc-500 uppercase tracking-wider">
               <th className="px-5 py-3.5 text-left">Member</th>
               <th className="px-5 py-3.5 text-left">Roles</th>
               <th className="px-5 py-3.5 text-left">Status</th>
@@ -248,29 +251,29 @@ function MembersTab({
           </thead>
           <tbody className="divide-y divide-white/[0.04]">
             {detail.members.map((m) => (
-              <tr key={m.userId} className="hover:bg-white/[0.015] transition-colors">
+              <tr key={m.userId} className="hover:bg-white/[0.02] transition-colors">
                 <td className="px-5 py-3.5">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-700/50 border border-white/[0.08]">
-                      <span className="text-xs font-semibold text-slate-300">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-zinc-800 border border-white/[0.08]">
+                      <span className="text-xs font-semibold text-zinc-300">
                         {(m.fullName ?? m.email ?? '?')[0]?.toUpperCase()}
                       </span>
                     </div>
                     <div>
-                      <p className="font-medium text-slate-100">{m.fullName || '—'}</p>
-                      <p className="font-mono text-[11px] text-slate-500">{m.email}</p>
+                      <p className="font-medium text-zinc-100">{m.fullName || '—'}</p>
+                      <p className="font-mono text-[11px] text-zinc-500">{m.email}</p>
                     </div>
                   </div>
                 </td>
                 <td className="px-5 py-3.5">
                   <div className="flex flex-wrap gap-1.5">
                     {m.roleNames.length === 0 ? (
-                      <span className="text-xs text-slate-600">No roles</span>
+                      <span className="text-xs text-zinc-600">No roles</span>
                     ) : (
                       m.roleNames.map((r) => (
                         <span
                           key={r}
-                          className="rounded-full bg-slate-700/40 border border-white/[0.07] px-2.5 py-0.5 text-[11px] font-medium text-slate-300"
+                          className="rounded-full bg-zinc-800/80 border border-white/[0.08] px-2.5 py-0.5 text-[11px] font-medium text-zinc-300"
                         >
                           {r}
                         </span>
@@ -287,16 +290,16 @@ function MembersTab({
                     disabled={pending === m.userId}
                     className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[11px] font-medium transition-all cursor-pointer disabled:opacity-50
                       ${m.status === 'ACTIVE'
-                        ? 'border-amber-500/25 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20'
-                        : 'border-emerald-500/25 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
+                        ? 'border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20'
+                        : 'border-orange-500/30 bg-orange-500/10 text-orange-400 hover:bg-orange-500/20'
                       }`}
                   >
                     {pending === m.userId ? (
                       <span className="h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" />
                     ) : m.status === 'ACTIVE' ? (
-                      <UserX size={11} />
+                      <UserX size={12} />
                     ) : (
-                      <UserCheck size={11} />
+                      <UserCheck size={12} />
                     )}
                     {m.status === 'ACTIVE' ? 'Suspend' : 'Activate'}
                   </button>
@@ -325,48 +328,45 @@ function ProjectsTab({
   if (detail.projects.length === 0) return <EmptyState message="No projects in this organization." />;
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
+    <div className="grid gap-3.5 sm:grid-cols-2">
       {detail.projects.map((p, i) => (
         <motion.div
           key={p.projectId}
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: i * 0.05 }}
+          transition={{ delay: i * 0.04 }}
         >
-          <Card className="p-5 hover:border-emerald-500/20 transition-colors">
-            {/* Header */}
+          <Card className="p-5 hover:border-orange-500/30 transition-all duration-200">
             <div className="flex items-start justify-between mb-3">
               <div className="flex-1 min-w-0">
                 <h3 className="font-display text-sm font-semibold text-white leading-tight truncate">
                   {p.title}
                 </h3>
-                <p className="font-mono text-[11px] text-slate-500 mt-0.5">{p.projectId}</p>
+                <p className="font-mono text-[11px] text-zinc-500 mt-0.5">{p.projectId}</p>
               </div>
               <StatusBadge status={p.status} />
             </div>
 
-            {/* Stats */}
-            <div className="flex gap-4 text-xs text-slate-500 mb-4">
+            <div className="flex gap-4 text-xs text-zinc-400 mb-4">
               <span className="flex items-center gap-1">
-                <Layers size={11} /> {p.stages.length} stages
+                <Layers size={12} className="text-zinc-500" /> {p.stages.length} stages
               </span>
               <span className="flex items-center gap-1">
-                <CheckSquare size={11} /> {p.stages.reduce((a, s) => a + s.tasks.length, 0)} tasks
+                <CheckSquare size={12} className="text-zinc-500" /> {p.stages.reduce((a, s) => a + s.tasks.length, 0)} tasks
               </span>
               {p.collaborators.length > 0 && (
-                <span className="flex items-center gap-1 text-violet-400">
-                  <Link2 size={11} /> {p.collaborators.length} collab
+                <span className="flex items-center gap-1 text-rose-400">
+                  <Link2 size={12} /> {p.collaborators.length} collab
                 </span>
               )}
             </div>
 
-            {/* Status override */}
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center justify-between gap-3 pt-3 border-t border-white/[0.04]">
               <select
                 aria-label={`Status for project ${p.projectId}`}
                 value={p.status}
                 onChange={(e) => onStatusChange(p.projectId, e.target.value)}
-                className="rounded-lg border border-white/[0.08] bg-[#131924] px-2.5 py-1.5 text-[11px] font-mono text-slate-300 outline-none focus:border-emerald-500/40 cursor-pointer"
+                className="rounded-lg border border-white/[0.08] bg-[#18181b] px-2.5 py-1.5 text-[11px] font-mono text-zinc-300 outline-none focus:border-orange-500/50 cursor-pointer"
               >
                 {PROJECT_STATUSES.map((s) => (
                   <option key={s} value={s}>{s}</option>
@@ -374,9 +374,9 @@ function ProjectsTab({
               </select>
               <Link
                 href={`/admin/organizations/${orgId}/projects/${p.projectId}`}
-                className="flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer"
+                className="flex items-center gap-1 text-xs text-orange-400 hover:text-orange-300 font-medium transition-colors cursor-pointer"
               >
-                Full details <ArrowRight size={12} />
+                Inspect Project <ArrowRight size={13} />
               </Link>
             </div>
           </Card>
@@ -388,23 +388,23 @@ function ProjectsTab({
 
 // ─── Roles Tab ────────────────────────────────────────────────────────────────
 function RolesTab({ detail }: { detail: OrgDetail }) {
-  if (detail.roles.length === 0) return <EmptyState message="No roles defined." />;
+  if (detail.roles.length === 0) return <EmptyState message="No roles configured." />;
 
   return (
     <Card>
       <div className="divide-y divide-white/[0.04]">
         {detail.roles.map((r) => (
           <div key={r.role_id} className="flex items-center gap-4 px-5 py-3.5">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 border border-violet-500/20">
-              <Shield size={14} className="text-violet-400" />
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-orange-500/10 border border-orange-500/20">
+              <Shield size={14} className="text-orange-400" />
             </div>
             <div className="flex-1">
-              <p className="text-sm font-medium text-slate-100">{r.name}</p>
-              <p className="font-mono text-[11px] text-slate-500">{r.role_id}</p>
+              <p className="text-sm font-medium text-zinc-100">{r.name}</p>
+              <p className="font-mono text-[11px] text-zinc-500">{r.role_id}</p>
             </div>
             {r.is_system && (
-              <span className="rounded-full bg-blue-500/10 border border-blue-500/20 px-2.5 py-0.5 text-[11px] font-medium text-blue-400">
-                System
+              <span className="rounded-full bg-zinc-800 border border-white/[0.08] px-2.5 py-0.5 text-[11px] font-medium text-zinc-300">
+                System Role
               </span>
             )}
           </div>

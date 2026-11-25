@@ -9,7 +9,6 @@ import {
   FolderKanban,
   CheckSquare,
   Link2,
-  Layers,
   TrendingUp,
   RefreshCw,
   ArrowRight,
@@ -44,7 +43,6 @@ export default function DashboardPage() {
         apiRequest<{ organizations: OrgRow[] }>('/api/v1/superadmin/organizations', {}, token),
       ]);
       setOverview(ov);
-      // Sort by createdAt desc for recent
       const sorted = [...orgRes.organizations].sort(
         (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
       );
@@ -91,11 +89,11 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <PageHeader
         title="Platform Dashboard"
-        subtitle="Real-time overview of all Nexora Field OS operations"
+        subtitle="Real-time telemetry and overview across all active shards"
         action={
           <button
             onClick={load}
-            className="flex items-center gap-2 rounded-xl border border-white/[0.08] bg-[#0e121a] px-3.5 py-2 text-xs font-medium text-slate-300 hover:border-emerald-500/30 hover:text-emerald-300 transition-all cursor-pointer"
+            className="flex items-center gap-2 rounded-xl border border-white/[0.08] bg-[#121215] px-3.5 py-2 text-xs font-medium text-zinc-300 hover:border-orange-500/40 hover:text-orange-300 transition-all cursor-pointer shadow-sm"
           >
             <RefreshCw size={13} />
             Refresh
@@ -104,42 +102,42 @@ export default function DashboardPage() {
       />
 
       {/* KPI Grid */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
         {[
           {
             label: 'Organizations',
             value: overview?.totalOrgs ?? 0,
             sub: `Across ${Object.keys(overview?.shardOrgCounts ?? {}).length} shards`,
             icon: Building2,
-            accent: 'text-emerald-400',
+            accent: 'text-orange-400',
           },
           {
             label: 'Platform Users',
             value: overview?.totalUsers ?? 0,
-            sub: `${verifiedRate}% verified`,
+            sub: `${verifiedRate}% verified accounts`,
             icon: Users,
-            accent: undefined,
+            accent: 'text-zinc-100',
           },
           {
             label: 'Active Projects',
             value: overview?.totalProjects ?? 0,
-            sub: `${overview?.totalStages ?? 0} stages total`,
+            sub: `${overview?.totalStages ?? 0} milestones tracked`,
             icon: FolderKanban,
-            accent: undefined,
+            accent: 'text-zinc-100',
           },
           {
             label: 'Task Completion',
             value: `${completionRate}%`,
-            sub: `${overview?.completedTasks ?? 0} / ${overview?.totalTasks ?? 0} tasks`,
+            sub: `${overview?.completedTasks ?? 0} / ${overview?.totalTasks ?? 0} finished`,
             icon: CheckSquare,
-            accent: completionRate >= 70 ? 'text-emerald-400' : completionRate >= 40 ? 'text-amber-400' : 'text-red-400',
+            accent: completionRate >= 70 ? 'text-orange-400' : completionRate >= 40 ? 'text-amber-400' : 'text-rose-400',
           },
         ].map((s, i) => (
           <motion.div
             key={s.label}
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.06 }}
+            transition={{ delay: i * 0.05 }}
           >
             <StatCard {...s} />
           </motion.div>
@@ -147,39 +145,41 @@ export default function DashboardPage() {
       </div>
 
       {/* Secondary stats row */}
-      <div className="grid grid-cols-2 gap-3">
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28 }}>
+      <div className="grid grid-cols-2 gap-3.5">
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
           <StatCard
             label="Cross-Org Collaborations"
             value={overview?.crossOrgCollaborations ?? 0}
-            sub="Active partner links"
+            sub="Inter-organizational partnerships"
             icon={Link2}
+            accent="text-rose-400"
           />
         </motion.div>
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.34 }}>
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
           <StatCard
             label="Verified Users"
             value={overview?.verifiedUsers ?? 0}
-            sub={`${verifiedRate}% of total`}
+            sub={`${verifiedRate}% identity validation rate`}
             icon={TrendingUp}
+            accent="text-amber-400"
           />
         </motion.div>
       </div>
 
       {/* Shard distribution */}
-      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
+      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
         <Card>
-          <div className="flex items-center gap-3 border-b border-white/[0.07] px-5 py-4">
-            <Database size={15} className="text-emerald-400" />
-            <h2 className="font-display text-sm font-semibold text-white">Shard Distribution</h2>
+          <div className="flex items-center gap-3 border-b border-white/[0.06] px-5 py-4">
+            <Database size={16} className="text-orange-400" />
+            <h2 className="font-display text-sm font-semibold text-white">Postgres Shard Distribution</h2>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-white/[0.05] text-xs text-slate-500">
+                <tr className="border-b border-white/[0.05] text-xs text-zinc-500">
                   <th className="px-5 py-3 text-left">Shard</th>
                   <th className="px-5 py-3 text-left">Organizations</th>
-                  <th className="px-5 py-3 text-left">Load Share</th>
+                  <th className="px-5 py-3 text-left">Cluster Share</th>
                   <th className="px-5 py-3 text-left">Status</th>
                 </tr>
               </thead>
@@ -193,16 +193,16 @@ export default function DashboardPage() {
                       <td className="px-5 py-3.5">
                         <ShardBadge shard={Number(shardId)} />
                       </td>
-                      <td className="px-5 py-3.5 font-mono text-slate-100">{count}</td>
+                      <td className="px-5 py-3.5 font-mono text-zinc-100">{count}</td>
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-3">
-                          <div className="h-1.5 w-24 rounded-full bg-white/[0.06] overflow-hidden">
+                          <div className="h-1.5 w-28 rounded-full bg-zinc-800 overflow-hidden">
                             <div
-                              className="h-full rounded-full bg-emerald-500"
+                              className="h-full rounded-full bg-gradient-to-r from-red-500 to-orange-500"
                               style={{ width: `${pct}%` }}
                             />
                           </div>
-                          <span className="text-xs font-mono text-slate-400">{pct}%</span>
+                          <span className="text-xs font-mono text-zinc-400">{pct}%</span>
                         </div>
                       </td>
                       <td className="px-5 py-3.5">
@@ -218,18 +218,18 @@ export default function DashboardPage() {
       </motion.div>
 
       {/* Recent orgs */}
-      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.48 }}>
+      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
         <Card>
-          <div className="flex items-center justify-between border-b border-white/[0.07] px-5 py-4">
+          <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4">
             <div className="flex items-center gap-3">
-              <Layers size={15} className="text-emerald-400" />
-              <h2 className="font-display text-sm font-semibold text-white">Recent Organizations</h2>
+              <Building2 size={16} className="text-orange-400" />
+              <h2 className="font-display text-sm font-semibold text-white">Recently Registered Organizations</h2>
             </div>
             <Link
               href="/admin/organizations"
-              className="flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer"
+              className="flex items-center gap-1 text-xs text-orange-400 hover:text-orange-300 transition-colors cursor-pointer"
             >
-              View all <ArrowRight size={12} />
+              View all <ArrowRight size={13} />
             </Link>
           </div>
           <div className="divide-y divide-white/[0.04]">
@@ -239,21 +239,20 @@ export default function DashboardPage() {
                 href={`/admin/organizations/${org.orgId}`}
                 className="flex items-center gap-4 px-5 py-3.5 hover:bg-white/[0.02] transition-colors cursor-pointer group"
               >
-                {/* Initials avatar */}
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/15 border border-emerald-500/20">
-                  <span className="font-display text-xs font-bold text-emerald-400">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-red-600/20 via-orange-500/20 to-amber-500/10 border border-orange-500/25">
+                  <span className="font-display text-xs font-bold text-orange-300">
                     {org.orgInitials || org.orgName.slice(0, 2).toUpperCase()}
                   </span>
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-slate-100 truncate">{org.orgName}</p>
-                  <p className="text-xs text-slate-500 truncate font-mono">{org.orgId}</p>
+                  <p className="text-sm font-medium text-zinc-100 truncate group-hover:text-orange-300 transition-colors">{org.orgName}</p>
+                  <p className="text-xs text-zinc-500 truncate font-mono">{org.orgId}</p>
                 </div>
-                <div className="flex items-center gap-3 text-xs text-slate-500 shrink-0">
+                <div className="flex items-center gap-3 text-xs text-zinc-400 shrink-0">
                   <ShardBadge shard={org.shardId} />
                   <span>{org.memberCount} members</span>
                   <span>{org.projectCount} projects</span>
-                  <ArrowRight size={13} className="text-slate-600 group-hover:text-emerald-400 transition-colors" />
+                  <ArrowRight size={13} className="text-zinc-600 group-hover:text-orange-400 transition-colors" />
                 </div>
               </Link>
             ))}
