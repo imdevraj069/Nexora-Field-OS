@@ -25,7 +25,7 @@ export interface WorkspaceAuthCtx {
   activeOrg: ActiveOrg | null;
   userOrgs: ActiveOrg[];
   isReady: boolean;
-  login: (token: string, user: UserSession, activeOrg: ActiveOrg) => void;
+  login: (token: string, user: UserSession, activeOrg: ActiveOrg, allOrgs?: ActiveOrg[]) => void;
   switchOrg: (org: ActiveOrg) => void;
   logout: () => void;
 }
