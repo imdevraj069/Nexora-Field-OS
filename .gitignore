@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+*/node_modules/
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+.turbo/
+*.tsbuildinfo
+
+# Flutter / Mobile
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+**/ios/Pods/
+**/android/.gradle/
+
+# Environment & Secrets
+.env
+.env.*
+!.env.example
+secrets/
+*.pem
+*.key
+
+# Runtime data & logs
+data/
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
