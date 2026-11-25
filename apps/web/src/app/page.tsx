@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { PERMISSION_FLAGS } from '@nexora/shared-types';
 import { CheckCircle2, AlertTriangle, ArrowRight, Sparkles, Database, Activity } from 'lucide-react';
 import { NexoraMark } from '../components/svg/NexoraMark';
@@ -215,6 +216,12 @@ export default function CommandCenterPage() {
           <DynamicIslandNav activeTab={activeTab} onSelect={setActiveTab} />
 
           <div className="flex items-center gap-3 text-xs font-mono tabular-nums">
+            <Link
+              href="/admin"
+              className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-amber-300 hover:bg-amber-500/20"
+            >
+              Superadmin Panel
+            </Link>
             {session ? (
               <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-emerald-300">
                 <Database className="h-3.5 w-3.5" />

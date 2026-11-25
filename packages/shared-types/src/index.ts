@@ -11,6 +11,7 @@ export interface AuthTokenPayload {
   activeOrgId: string;
   shardId: 1 | 2 | 3;
   roleId: string;
+  isSuperadmin?: boolean;
 }
 
 export interface MediaUploadMetadata {

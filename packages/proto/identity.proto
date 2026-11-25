@@ -19,6 +19,7 @@ message VerifyTokenResponse {
   string active_org_id = 4;
   int32 shard_id = 5;
   string role_id = 6;
+  bool is_superadmin = 7;
 }
 
 message ResolveOrgShardRequest {

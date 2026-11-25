@@ -4,6 +4,7 @@ import { createHandler } from 'graphql-http/lib/use/express';
 import { gatewayEnv, initGatewayMq } from './config/env';
 import { AuthedRequest, authMiddleware, errorHandler } from './middlewares/auth';
 import gatewayRoutes from './routes/gateway.routes';
+import superadminRoutes from './routes/superadmin.routes';
 import { createGraphqlRoot, gatewayGraphqlSchema } from './graphql/schema';
 import { attachSocketServer } from './ws/socketServer';
 
@@ -23,6 +24,7 @@ async function bootstrap() {
     })(req, res, next);
   });
 
+  app.use('/api/v1/superadmin', superadminRoutes);
   app.use('/api/v1', gatewayRoutes);
   app.use(errorHandler);
 

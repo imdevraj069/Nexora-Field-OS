@@ -2,6 +2,10 @@ import { Request, Response } from 'express';
 import { AuthService } from '../services/authService';
 
 export const AuthController = {
+  superadminLogin: async (req: Request, res: Response) => {
+    const result = await AuthService.superadminLogin(req.body.username, req.body.password);
+    res.json(result);
+  },
   register: async (req: Request, res: Response) => {
     const result = await AuthService.register(req.body);
     res.status(201).json(result);

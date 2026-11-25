@@ -39,6 +39,7 @@ export function startIdentityGrpcServer(): void {
           active_org_id: decoded.activeOrgId,
           shard_id: decoded.shardId,
           role_id: decoded.roleId,
+          is_superadmin: Boolean(decoded.isSuperadmin && decoded.roleId === 'PLATFORM_SUPERADMIN'),
         });
       } catch {
         callback(null, { valid: false });

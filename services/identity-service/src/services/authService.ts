@@ -28,7 +28,41 @@ function hashToken(raw: string): string {
   return crypto.createHash('sha256').update(raw).digest('hex');
 }
 
+function safeCompare(a: string, b: string): boolean {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
+
 export const AuthService = {
+  async superadminLogin(username?: string, password?: string) {
+    if (!username || !password) {
+      throw new AppError(400, 'username and password are required');
+    }
+    if (!safeCompare(username.trim(), envConfig.superadminUsername) || !safeCompare(password, envConfig.superadminPassword)) {
+      throw new AppError(401, 'Invalid superadmin credentials');
+    }
+
+    const payload: AuthTokenPayload = {
+      sub: 'SUPERADMIN-DEVRAJ',
+      email: 'devraj@nexora.platform',
+      activeOrgId: 'PLATFORM-ROOT',
+      shardId: 1,
+      roleId: 'PLATFORM_SUPERADMIN',
+      isSuperadmin: true,
+    };
+
+    const accessToken = jwt.sign(payload, envConfig.jwtAccessSecret, { expiresIn: '4h' });
+    return {
+      accessToken,
+      superadmin: {
+        username: envConfig.superadminUsername,
+        role: 'PLATFORM_SUPERADMIN',
+      },
+    };
+  },
+
   async register(input: {
     email?: string;
     password?: string;

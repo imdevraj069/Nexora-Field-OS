@@ -8,6 +8,7 @@ export interface AuthContext {
   activeOrgId: string;
   shardId: 1 | 2 | 3;
   roleId: string;
+  isSuperadmin?: boolean;
 }
 
 export interface AuthedRequest extends Request {
@@ -33,11 +34,20 @@ export async function authMiddleware(req: AuthedRequest, res: Response, next: Ne
       activeOrgId: String(verified.active_org_id),
       shardId: Number(verified.shard_id) as 1 | 2 | 3,
       roleId: String(verified.role_id),
+      isSuperadmin: Boolean(verified.is_superadmin),
     };
     next();
   } catch (err) {
     res.status(503).json({ error: 'Identity verification unavailable', detail: (err as Error).message });
   }
+}
+
+export function superadminOnly(req: AuthedRequest, res: Response, next: NextFunction): void {
+  if (!req.auth?.isSuperadmin || req.auth.userId !== 'SUPERADMIN-DEVRAJ') {
+    res.status(403).json({ error: 'Forbidden: Platform Superadmin access required' });
+    return;
+  }
+  next();
 }
 
 export function errorHandler(err: Error, req: Request, res: Response, _next: NextFunction): void {
