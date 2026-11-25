@@ -20,9 +20,11 @@ import {
 } from 'lucide-react';
 import { NexoraMark } from '../components/svg/NexoraMark';
 import { FadeIn } from '../components/ui/motion';
+import { useAuthStore } from '../stores/useAuthStore';
 
 export default function MarketingLandingPage() {
   const [activeTaskStep, setActiveTaskStep] = useState(2); // 0: TODO, 1: IN_TRANSIT, 2: ON_FIELD, 3: SUBMITTED, 4: VERIFIED
+  const { isAuthenticated, user, activeOrg, isHydrated, logout } = useAuthStore();
 
   const taskSteps = [
     { label: 'Dispatch', status: 'TODO', time: '09:15 AM', desc: 'Task assigned to Field Engineer' },
@@ -62,19 +64,40 @@ export default function MarketingLandingPage() {
           </nav>
 
           <div className="flex items-center gap-3">
-            <Link
-              href="/login"
-              className="px-4 py-2 text-sm font-medium text-zinc-300 hover:text-white transition-colors cursor-pointer"
-            >
-              Sign In
-            </Link>
-            <Link
-              href="/register"
-              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-red-600 via-orange-600 to-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-orange-950/40 hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer"
-            >
-              Launch Workspace
-              <ArrowRight size={14} />
-            </Link>
+            {isHydrated && isAuthenticated ? (
+              <>
+                <Link
+                  href="/dashboard"
+                  className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl border border-white/[0.08] bg-[#18181b] text-xs font-mono text-zinc-300 hover:text-white"
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                  {activeOrg?.org_name || user?.fullName || 'Workspace'}
+                </Link>
+                <Link
+                  href="/dashboard"
+                  className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-red-600 via-orange-600 to-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-orange-950/40 hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer"
+                >
+                  Go to Dashboard
+                  <ArrowRight size={14} />
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link
+                  href="/login"
+                  className="px-4 py-2 text-sm font-medium text-zinc-300 hover:text-white transition-colors cursor-pointer"
+                >
+                  Sign In
+                </Link>
+                <Link
+                  href={isHydrated && isAuthenticated ? '/dashboard' : '/login'}
+                  className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-red-600 via-orange-600 to-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-orange-950/40 hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer"
+                >
+                  Launch Workspace
+                  <ArrowRight size={14} />
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </header>
@@ -106,10 +129,10 @@ export default function MarketingLandingPage() {
           {/* CTA Buttons */}
           <FadeIn delay={0.2} className="mt-8 flex flex-wrap items-center justify-center gap-4">
             <Link
-              href="/register"
+              href={isHydrated && isAuthenticated ? '/dashboard' : '/register'}
               className="flex items-center gap-2.5 rounded-xl bg-gradient-to-r from-red-600 via-orange-600 to-orange-500 px-6 py-3.5 text-base font-semibold text-white shadow-xl shadow-orange-950/50 hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer"
             >
-              Start Free Workspace
+              {isHydrated && isAuthenticated ? 'Open Operations Dashboard' : 'Start Free Workspace'}
               <ArrowRight size={16} />
             </Link>
             <Link

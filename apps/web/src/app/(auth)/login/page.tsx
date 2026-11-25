@@ -37,7 +37,8 @@ export default function LoginPage() {
       });
 
       login(res.accessToken, res.user, res.activeOrg, res.userOrgs || [res.activeOrg]);
-      router.push('/dashboard');
+      // Immediate reliable browser redirection
+      window.location.href = '/dashboard';
     } catch (err) {
       setError((err as Error).message || 'Invalid credentials or organization not found.');
     } finally {

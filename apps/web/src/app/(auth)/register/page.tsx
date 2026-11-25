@@ -59,7 +59,7 @@ export default function RegisterPage() {
       };
 
       login(res.accessToken, res.user, activeOrg, [activeOrg]);
-      router.push('/dashboard');
+      window.location.href = '/dashboard';
     } catch (err) {
       setError((err as Error).message || 'Failed to create organization.');
     } finally {
