@@ -117,7 +117,11 @@ export const AuthService = {
       shardId,
       roleId: adminRoleId,
     };
-    const accessToken = jwt.sign(payload, envConfig.jwtAccessSecret, { expiresIn: '15m' });
+    const accessToken = jwt.sign(payload, envConfig.jwtAccessSecret, { expiresIn: '2h' });
+    const refreshToken = jwt.sign({ sub: userId, jti: crypto.randomUUID() }, envConfig.jwtRefreshSecret, {
+      expiresIn: '7d',
+    });
+    await IdentityRepo.saveRefreshToken(crypto.randomUUID(), userId, hashToken(refreshToken));
 
     publishEmailTask({
       template: 'verify-email',
@@ -128,6 +132,7 @@ export const AuthService = {
 
     return {
       accessToken,
+      refreshToken,
       user: {
         userId,
         email,
@@ -234,7 +239,7 @@ export const AuthService = {
       roleId: activeMembership.role_id,
     };
 
-    const accessToken = jwt.sign(payload, envConfig.jwtAccessSecret, { expiresIn: '15m' });
+    const accessToken = jwt.sign(payload, envConfig.jwtAccessSecret, { expiresIn: '2h' });
     const refreshToken = jwt.sign({ sub: found.user.user_id, jti: crypto.randomUUID() }, envConfig.jwtRefreshSecret, {
       expiresIn: '7d',
     });
@@ -244,6 +249,59 @@ export const AuthService = {
     return {
       accessToken,
       refreshToken,
+      user: {
+        userId: found.user.user_id,
+        email: found.user.email,
+        fullName: found.user.full_name,
+        isVerified: found.user.is_verified,
+      },
+      activeOrg: activeMembership,
+      organizations: found.memberships,
+    };
+  },
+
+  async refreshSession(refreshToken?: string, orgId?: string) {
+    if (!refreshToken) throw new AppError(400, 'refreshToken is required');
+    let decoded: { sub: string };
+    try {
+      decoded = jwt.verify(refreshToken, envConfig.jwtRefreshSecret) as { sub: string };
+    } catch {
+      throw new AppError(401, 'Refresh token expired or invalid');
+    }
+
+    const found = await IdentityRepo.findUserWithMembershipsById(decoded.sub);
+    if (!found) throw new AppError(401, 'User account not found');
+
+    const newRefreshToken = jwt.sign(
+      { sub: found.user.user_id, jti: crypto.randomUUID() },
+      envConfig.jwtRefreshSecret,
+      { expiresIn: '7d' },
+    );
+    const rotated = await IdentityRepo.validateAndRotateRefreshToken(
+      found.user.user_id,
+      hashToken(refreshToken),
+      crypto.randomUUID(),
+      hashToken(newRefreshToken),
+    );
+    if (!rotated) throw new AppError(401, 'Refresh token revoked or expired');
+
+    const activeMembership = orgId
+      ? found.memberships.find((m) => m.org_id === orgId.toUpperCase()) || found.memberships[0]
+      : found.memberships[0];
+    if (!activeMembership) throw new AppError(403, 'User has no active organization membership');
+
+    const payload: AuthTokenPayload = {
+      sub: found.user.user_id,
+      email: found.user.email,
+      activeOrgId: activeMembership.org_id,
+      shardId: activeMembership.shard_id,
+      roleId: activeMembership.role_id,
+    };
+    const accessToken = jwt.sign(payload, envConfig.jwtAccessSecret, { expiresIn: '2h' });
+
+    return {
+      accessToken,
+      refreshToken: newRefreshToken,
       user: {
         userId: found.user.user_id,
         email: found.user.email,
@@ -418,11 +476,16 @@ export const AuthService = {
       shardId: joined.shardId,
       roleId: joined.roleId,
     };
-    const accessToken = jwt.sign(payload, envConfig.jwtAccessSecret, { expiresIn: '15m' });
+    const accessToken = jwt.sign(payload, envConfig.jwtAccessSecret, { expiresIn: '2h' });
+    const refreshToken = jwt.sign({ sub: userId, jti: crypto.randomUUID() }, envConfig.jwtRefreshSecret, {
+      expiresIn: '7d',
+    });
+    await IdentityRepo.saveRefreshToken(crypto.randomUUID(), userId, hashToken(refreshToken));
 
     return {
       accepted: true,
       accessToken,
+      refreshToken,
       user: { userId, email: inv.email, fullName },
       activeOrg,
       userOrgs: found?.memberships || [activeOrg],

@@ -8,6 +8,7 @@ router.post('/register', asyncHandler(AuthController.register));
 router.post('/register-org', asyncHandler(AuthController.registerOrg));
 router.post('/verify-email', asyncHandler(AuthController.verifyEmail));
 router.post('/login', asyncHandler(AuthController.login));
+router.post('/refresh', asyncHandler(AuthController.refresh));
 router.post('/request-reset', asyncHandler(AuthController.requestReset));
 router.post('/reset-password', asyncHandler(AuthController.resetPassword));
 router.post('/invites', asyncHandler(AuthController.createInvite));

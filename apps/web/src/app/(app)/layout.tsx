@@ -29,7 +29,7 @@ import { NexoraMark } from '@/components/svg/NexoraMark';
 import { WorkspaceAuthProvider, useWorkspaceAuth } from '@/hooks/useWorkspaceAuth';
 import { useAuthStore, WorkflowStatusDef } from '@/stores/useAuthStore';
 import { useThemeStore } from '@/stores/useThemeStore';
-import { apiRequest } from '@/services/nexoraClient';
+import { apiRequest, installFetchAuthInterceptor, isTokenExpiringSoon, refreshAccessToken } from '@/services/nexoraClient';
 import { TaskDetailDrawer } from '@/components/drawers/TaskDetailDrawer';
 import { MARLO_EASE } from '@/components/ui/motion';
 
@@ -80,6 +80,26 @@ function WorkspaceShell({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [railMode, setRailMode] = useState(false);
   const [showOrgDropdown, setShowOrgDropdown] = useState(false);
+
+  React.useEffect(() => {
+    installFetchAuthInterceptor();
+    const checkAndRefresh = () => {
+      const { token: t, refreshToken: rt } = useAuthStore.getState();
+      if (t && rt && isTokenExpiringSoon(t, 240)) {
+        void refreshAccessToken();
+      }
+    };
+    checkAndRefresh();
+    const timer = setInterval(checkAndRefresh, 60_000);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') checkAndRefresh();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, []);
 
   React.useEffect(() => {
     if (isReady && !token) {

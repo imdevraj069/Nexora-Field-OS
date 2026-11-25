@@ -11,6 +11,7 @@ import { useWorkspaceAuth, ActiveOrg, UserSession } from '@/hooks/useWorkspaceAu
 
 interface RegisterResponse {
   accessToken: string;
+  refreshToken?: string;
   user: UserSession;
   organization: {
     org_id: string;
@@ -58,7 +59,7 @@ export default function RegisterPage() {
         shard_id: res.organization.shardId,
       };
 
-      login(res.accessToken, res.user, activeOrg, [activeOrg]);
+      login(res.accessToken, res.user, activeOrg, [activeOrg], res.refreshToken || null);
       window.location.href = '/dashboard';
     } catch (err) {
       setError((err as Error).message || 'Failed to create organization.');

@@ -47,6 +47,7 @@ export default function InviteAcceptPage() {
     try {
       const res = await apiRequest<{
         accessToken: string;
+        refreshToken?: string;
         user: UserSession;
         activeOrg: ActiveOrg;
         userOrgs?: ActiveOrg[];
@@ -58,7 +59,7 @@ export default function InviteAcceptPage() {
           password: details?.requiresOnboarding ? password : undefined,
         }),
       });
-      login(res.accessToken, res.user, res.activeOrg, res.userOrgs || [res.activeOrg]);
+      login(res.accessToken, res.user, res.activeOrg, res.userOrgs || [res.activeOrg], res.refreshToken || null);
       setSuccess(true);
       setTimeout(() => {
         window.location.href = '/dashboard';

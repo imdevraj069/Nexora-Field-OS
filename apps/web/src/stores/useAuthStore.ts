@@ -34,6 +34,7 @@ export const DEFAULT_STATUSES: WorkflowStatusDef[] = [
 
 export interface AuthState {
   token: string | null;
+  refreshToken: string | null;
   user: UserSession | null;
   activeOrg: ActiveOrg | null;
   userOrgs: ActiveOrg[];
@@ -43,7 +44,8 @@ export interface AuthState {
   isAuthenticated: boolean;
   isHydrated: boolean;
 
-  setAuth: (token: string, user: UserSession, activeOrg: ActiveOrg, userOrgs?: ActiveOrg[]) => void;
+  setAuth: (token: string, user: UserSession, activeOrg: ActiveOrg, userOrgs?: ActiveOrg[], refreshToken?: string | null) => void;
+  setTokens: (token: string, refreshToken?: string | null) => void;
   setContext: (roleName: string, permissions: Record<string, boolean>, statuses: WorkflowStatusDef[]) => void;
   switchOrg: (org: ActiveOrg) => void;
   logout: () => void;
@@ -52,8 +54,9 @@ export interface AuthState {
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       token: null,
+      refreshToken: null,
       user: null,
       activeOrg: null,
       userOrgs: [],
@@ -63,16 +66,29 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       isHydrated: false,
 
-      setAuth: (token, user, activeOrg, userOrgs = [activeOrg]) => {
+      setAuth: (token, user, activeOrg, userOrgs = [activeOrg], refreshToken = null) => {
         if (typeof window !== 'undefined') {
           sessionStorage.setItem('nexora_session_token', token);
           localStorage.setItem('nexora_session_token', token);
         }
         set({
           token,
+          refreshToken: refreshToken ?? get().refreshToken,
           user,
           activeOrg,
           userOrgs,
+          isAuthenticated: true,
+        });
+      },
+
+      setTokens: (token, refreshToken) => {
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('nexora_session_token', token);
+          localStorage.setItem('nexora_session_token', token);
+        }
+        set({
+          token,
+          refreshToken: refreshToken !== undefined ? refreshToken : get().refreshToken,
           isAuthenticated: true,
         });
       },
@@ -96,6 +112,7 @@ export const useAuthStore = create<AuthState>()(
         }
         set({
           token: null,
+          refreshToken: null,
           user: null,
           activeOrg: null,
           userOrgs: [],

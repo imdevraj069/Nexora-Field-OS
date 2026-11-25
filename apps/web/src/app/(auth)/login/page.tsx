@@ -11,6 +11,7 @@ import { useWorkspaceAuth, ActiveOrg, UserSession } from '@/hooks/useWorkspaceAu
 
 interface LoginResponse {
   accessToken: string;
+  refreshToken?: string;
   user: UserSession;
   activeOrg: ActiveOrg;
   userOrgs?: ActiveOrg[];
@@ -36,7 +37,7 @@ export default function LoginPage() {
         body: JSON.stringify({ email, password }),
       });
 
-      login(res.accessToken, res.user, res.activeOrg, res.userOrgs || [res.activeOrg]);
+      login(res.accessToken, res.user, res.activeOrg, res.userOrgs || [res.activeOrg], res.refreshToken || null);
       // Immediate reliable browser redirection
       window.location.href = '/dashboard';
     } catch (err) {

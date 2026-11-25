@@ -22,6 +22,10 @@ export const AuthController = {
     const result = await AuthService.login(req.body.email, req.body.password, req.body.orgId);
     res.json(result);
   },
+  refresh: async (req: Request, res: Response) => {
+    const result = await AuthService.refreshSession(req.body.refreshToken, req.body.orgId);
+    res.json(result);
+  },
   requestReset: async (req: Request, res: Response) => {
     const result = await AuthService.requestReset(req.body.email);
     res.json(result);

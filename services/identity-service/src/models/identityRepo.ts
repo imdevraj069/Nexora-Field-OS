@@ -131,12 +131,45 @@ export const IdentityRepo = {
     return { user, memberships: memberships.rows };
   },
 
+  async findUserWithMembershipsById(userId: string) {
+    const globalPool = dataRouter.postgres.getGlobalPool();
+    const userRes = await globalPool.query(
+      `SELECT user_id, email, password_hash, full_name, is_verified FROM users WHERE user_id = $1`,
+      [userId],
+    );
+    if (userRes.rows.length === 0) return null;
+    const user = userRes.rows[0];
+    const memberships = await globalPool.query(
+      `SELECT m.org_id, m.role_id, d.shard_id, d.org_name
+       FROM user_org_memberships m
+       JOIN org_directory d ON d.org_id = m.org_id
+       WHERE m.user_id = $1 AND m.is_active = TRUE`,
+      [user.user_id],
+    );
+    return { user, memberships: memberships.rows };
+  },
+
   async saveRefreshToken(tokenId: string, userId: string, tokenHash: string) {
     await dataRouter.postgres.getGlobalPool().query(
       `INSERT INTO refresh_tokens (token_id, user_id, token_hash, expires_at)
        VALUES ($1, $2, $3, NOW() + INTERVAL '7 days')`,
       [tokenId, userId, tokenHash],
     );
+  },
+
+  async validateAndRotateRefreshToken(userId: string, oldHash: string, newTokenId: string, newHash: string) {
+    const pool = dataRouter.postgres.getGlobalPool();
+    const { rowCount } = await pool.query(
+      `DELETE FROM refresh_tokens WHERE user_id = $1 AND token_hash = $2 AND expires_at > NOW()`,
+      [userId, oldHash],
+    );
+    if (!rowCount || rowCount === 0) return false;
+    await pool.query(
+      `INSERT INTO refresh_tokens (token_id, user_id, token_hash, expires_at)
+       VALUES ($1, $2, $3, NOW() + INTERVAL '7 days')`,
+      [newTokenId, userId, newHash],
+    );
+    return true;
   },
 
   async setResetToken(email: string, resetHash: string) {
