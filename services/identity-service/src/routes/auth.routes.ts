@@ -10,5 +10,8 @@ router.post('/verify-email', asyncHandler(AuthController.verifyEmail));
 router.post('/login', asyncHandler(AuthController.login));
 router.post('/request-reset', asyncHandler(AuthController.requestReset));
 router.post('/reset-password', asyncHandler(AuthController.resetPassword));
+router.post('/invites', asyncHandler(AuthController.createInvite));
+router.get('/invites/:token', asyncHandler(AuthController.getInviteDetails));
+router.post('/accept-invite', asyncHandler(AuthController.acceptInvite));
 
 export default router;

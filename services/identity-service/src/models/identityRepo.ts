@@ -154,4 +154,64 @@ export const IdentityRepo = {
     );
     return Boolean(rowCount && rowCount > 0);
   },
+
+  async createInvitation(params: {
+    inviteId: string;
+    token: string;
+    orgId: string;
+    orgName: string;
+    shardId: ShardId;
+    email: string;
+    roleId: string;
+    roleName: string;
+    invitedBy: string;
+  }) {
+    await dataRouter.postgres.getGlobalPool().query(
+      `INSERT INTO org_invitations (invite_id, token, org_id, org_name, shard_id, email, role_id, role_name, invited_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [
+        params.inviteId,
+        params.token,
+        params.orgId,
+        params.orgName,
+        params.shardId,
+        params.email,
+        params.roleId,
+        params.roleName,
+        params.invitedBy,
+      ],
+    );
+  },
+
+  async findInvitationByToken(token: string) {
+    const { rows } = await dataRouter.postgres.getGlobalPool().query(
+      `SELECT invite_id, token, org_id, org_name, shard_id, email, role_id, role_name, invited_by, expires_at, accepted_at
+       FROM org_invitations WHERE token = $1`,
+      [token],
+    );
+    return rows[0] ?? null;
+  },
+
+  async markInvitationAccepted(inviteId: string) {
+    await dataRouter.postgres.getGlobalPool().query(
+      `UPDATE org_invitations SET accepted_at = NOW() WHERE invite_id = $1`,
+      [inviteId],
+    );
+  },
+
+  async findUserByEmail(email: string) {
+    const { rows } = await dataRouter.postgres.getGlobalPool().query(
+      `SELECT user_id, email, full_name, is_verified FROM users WHERE email = $1`,
+      [email],
+    );
+    return rows[0] ?? null;
+  },
+
+  async getOrgInfo(orgId: string) {
+    const { rows } = await dataRouter.postgres.getGlobalPool().query(
+      `SELECT org_id, org_name, shard_id FROM org_directory WHERE org_id = $1`,
+      [orgId],
+    );
+    return rows[0] ?? null;
+  },
 };

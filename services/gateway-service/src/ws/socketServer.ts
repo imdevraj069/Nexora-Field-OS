@@ -3,8 +3,17 @@ import { Server as SocketIOServer } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import { dataRouter } from '../config/env';
 
+let ioInstance: SocketIOServer | null = null;
+
+export function emitProjectEvent(projectId: string, event: string, payload: unknown): void {
+  if (!ioInstance) return;
+  ioInstance.to(`project:${projectId}`).emit(event, payload);
+  ioInstance.emit(event, { projectId, ...(typeof payload === 'object' && payload ? payload : {}) });
+}
+
 export async function attachSocketServer(server: http.Server): Promise<SocketIOServer> {
   const io = new SocketIOServer(server, { cors: { origin: '*' } });
+  ioInstance = io;
 
   try {
     const pubClient = dataRouter.redis.getGlobalClient();

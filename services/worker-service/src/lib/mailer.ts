@@ -20,6 +20,11 @@ const TEMPLATES: Record<string, string> = {
     <p>Task: <strong>{{taskTitle}}</strong> (Stage: {{stageName}})</p>
     <p>Deadline: {{deadline}}</p>
   `,
+  'org-invite': `
+    <h2>You are invited to {{orgName}} on Nexora Field OS</h2>
+    <p><strong>{{invitedBy}}</strong> invited you to join <strong>{{orgName}}</strong> ({{orgId}}) as <strong>{{roleName}}</strong>.</p>
+    <p>Accept your invitation here: <a href="{{inviteUrl}}">{{inviteUrl}}</a></p>
+  `,
 };
 
 const compiledTemplates = Object.fromEntries(

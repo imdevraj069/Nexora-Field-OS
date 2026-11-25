@@ -30,4 +30,17 @@ export const AuthController = {
     const result = await AuthService.resetPassword(req.body.email, req.body.resetToken, req.body.newPassword);
     res.json(result);
   },
+  createInvite: async (req: Request, res: Response) => {
+    const origin = req.headers.origin || `${req.protocol}://${req.get('host')}`;
+    const result = await AuthService.createInvite(req.headers.authorization, { ...req.body, origin });
+    res.status(201).json(result);
+  },
+  getInviteDetails: async (req: Request, res: Response) => {
+    const result = await AuthService.getInviteDetails(String(req.params.token));
+    res.json(result);
+  },
+  acceptInvite: async (req: Request, res: Response) => {
+    const result = await AuthService.acceptInvite(req.body);
+    res.json(result);
+  },
 };

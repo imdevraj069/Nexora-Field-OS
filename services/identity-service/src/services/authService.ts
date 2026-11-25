@@ -281,4 +281,151 @@ export const AuthService = {
     if (!ok) throw new AppError(400, 'Invalid or expired reset token');
     return { reset: true };
   },
+
+  async createInvite(
+    authHeader: string | undefined,
+    input: { email?: string; roleId?: string; roleName?: string; origin?: string },
+  ) {
+    if (!authHeader?.startsWith('Bearer ')) {
+      throw new AppError(401, 'Missing authorization token');
+    }
+    let decoded: AuthTokenPayload;
+    try {
+      decoded = jwt.verify(authHeader.slice(7), envConfig.jwtAccessSecret) as AuthTokenPayload;
+    } catch {
+      throw new AppError(401, 'Invalid or expired access token');
+    }
+
+    if (!input.email) throw new AppError(400, 'Invitee email is required');
+    const orgInfo = await IdentityRepo.getOrgInfo(decoded.activeOrgId);
+    if (!orgInfo) throw new AppError(404, 'Organization not found');
+
+    const inviteId = `INV-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+    const token = crypto.randomBytes(18).toString('hex');
+    const email = input.email.toLowerCase().trim();
+    const roleName = input.roleName || 'Member';
+    const roleId = input.roleId || '';
+
+    await IdentityRepo.createInvitation({
+      inviteId,
+      token,
+      orgId: orgInfo.org_id,
+      orgName: orgInfo.org_name,
+      shardId: orgInfo.shard_id,
+      email,
+      roleId,
+      roleName,
+      invitedBy: decoded.email,
+    });
+
+    const baseUrl = input.origin || 'http://localhost:8080';
+    const inviteUrl = `${baseUrl}/invite/${token}`;
+
+    publishEmailTask({
+      template: 'org-invite',
+      to: email,
+      subject: `Invitation to join ${orgInfo.org_name} on Nexora Field OS`,
+      data: {
+        orgName: orgInfo.org_name,
+        orgId: orgInfo.org_id,
+        roleName,
+        invitedBy: decoded.email,
+        inviteUrl,
+      },
+    });
+
+    return { inviteId, token, inviteUrl, email, orgId: orgInfo.org_id, roleName };
+  },
+
+  async getInviteDetails(token: string) {
+    const inv = await IdentityRepo.findInvitationByToken(token);
+    if (!inv) throw new AppError(404, 'Invitation not found');
+    if (inv.accepted_at) throw new AppError(400, 'Invitation has already been accepted');
+    if (new Date(inv.expires_at).getTime() < Date.now()) {
+      throw new AppError(400, 'Invitation has expired');
+    }
+    const existingUser = await IdentityRepo.findUserByEmail(inv.email);
+    return {
+      inviteId: inv.invite_id,
+      orgId: inv.org_id,
+      orgName: inv.org_name,
+      email: inv.email,
+      roleName: inv.role_name,
+      invitedBy: inv.invited_by,
+      requiresOnboarding: !existingUser,
+    };
+  },
+
+  async acceptInvite(input: { token?: string; fullName?: string; password?: string }) {
+    if (!input.token) throw new AppError(400, 'Invitation token is required');
+    const inv = await IdentityRepo.findInvitationByToken(input.token);
+    if (!inv) throw new AppError(404, 'Invalid invitation token');
+    if (inv.accepted_at) throw new AppError(400, 'Invitation has already been accepted');
+    if (new Date(inv.expires_at).getTime() < Date.now()) {
+      throw new AppError(400, 'Invitation has expired');
+    }
+
+    let existingUser = await IdentityRepo.findUserByEmail(inv.email);
+    let userId: string;
+    let fullName: string;
+
+    if (!existingUser) {
+      if (!input.fullName || !input.password) {
+        throw new AppError(400, 'fullName and password are required to complete onboarding');
+      }
+      userId = generatePrefixedId('USR');
+      fullName = input.fullName.trim();
+      const verifyOtp = crypto.randomBytes(3).toString('hex').toUpperCase();
+      await IdentityRepo.insertUser({
+        userId,
+        email: inv.email,
+        passwordHash: hashPassword(input.password),
+        fullName,
+        verifyTokenHash: hashToken(verifyOtp),
+      });
+      await IdentityRepo.verifyUserOtp(inv.email, hashToken(verifyOtp));
+    } else {
+      userId = existingUser.user_id;
+      fullName = existingUser.full_name;
+    }
+
+    const joined = await IdentityRepo.addUserToExistingOrg({
+      orgId: inv.org_id,
+      userId,
+      roleId: inv.role_id || undefined,
+      defaultMemberFlags: {
+        [PERMISSION_FLAGS.TASK_EXECUTE_OWN]: true,
+        [PERMISSION_FLAGS.TASK_UPLOAD_EVIDENCE]: true,
+        [PERMISSION_FLAGS.STAGE_VIEW_ONLY]: true,
+      },
+    });
+
+    await IdentityRepo.markInvitationAccepted(inv.invite_id);
+
+    const found = await IdentityRepo.findUserWithMemberships(inv.email);
+    const activeOrg =
+      found?.memberships.find((m) => m.org_id === inv.org_id) || {
+        org_id: inv.org_id,
+        org_name: inv.org_name,
+        role_id: joined.roleId,
+        shard_id: joined.shardId,
+      };
+
+    const payload: AuthTokenPayload = {
+      sub: userId,
+      email: inv.email,
+      activeOrgId: inv.org_id,
+      shardId: joined.shardId,
+      roleId: joined.roleId,
+    };
+    const accessToken = jwt.sign(payload, envConfig.jwtAccessSecret, { expiresIn: '15m' });
+
+    return {
+      accepted: true,
+      accessToken,
+      user: { userId, email: inv.email, fullName },
+      activeOrg,
+      userOrgs: found?.memberships || [activeOrg],
+    };
+  },
 };

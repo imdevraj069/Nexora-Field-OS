@@ -9,6 +9,22 @@ import { dataRouter, gatewayEnv, getGatewayMqChannel } from '../config/env';
 import { AuthContext } from '../middlewares/auth';
 import { aiClient, grpcCall, identityClient, storageClient } from '../grpc/clients';
 import { AppError } from '../utils/http';
+import { emitProjectEvent } from '../ws/socketServer';
+
+const STAGE_TEMPLATES: Record<string, string[]> = {
+  solar: [
+    'Site Survey & Civil Grading',
+    'Mounting Structure & Tracker Assembly',
+    'Inverter, DC Wiring & Earthing',
+    'SCADA Interlock & Grid Handover',
+  ],
+  telecom: [
+    'Tower Structural Load Audit',
+    'RF Antenna & Microwave Alignment',
+    'Backhaul Fiber & Power Commissioning',
+  ],
+  standard: ['Mobilization & Dispatch', 'On-Field Execution & Verification'],
+};
 
 export const ProjectService = {
   async getOrgMemberRoleContext(orgId: string, shardId: 1 | 2 | 3, userId: string): Promise<RolePermissionContext> {
@@ -63,7 +79,11 @@ export const ProjectService = {
   async listProjects(auth: AuthContext) {
     const homePool = dataRouter.postgres.getReadPool(auth.shardId, true);
     const homeProjects = await homePool.query(
-      `SELECT project_id, org_id, title, status FROM projects WHERE org_id = $1 ORDER BY created_at DESC`,
+      `SELECT p.project_id, p.org_id, p.title, p.description, p.status, p.created_at,
+              (SELECT COUNT(*)::int FROM stages s WHERE s.project_id = p.project_id) AS stages_count,
+              (SELECT COUNT(*)::int FROM tasks t WHERE t.project_id = p.project_id) AS tasks_count,
+              (SELECT COUNT(*)::int FROM tasks t WHERE t.project_id = p.project_id AND t.status IN ('COMPLETED', 'VERIFIED', 'SUBMITTED')) AS completed_tasks_count
+       FROM projects p WHERE p.org_id = $1 ORDER BY p.created_at DESC`,
       [auth.activeOrgId],
     );
     const collabRows = await dataRouter.postgres
@@ -75,9 +95,14 @@ export const ProjectService = {
     const sharedProjects = await Promise.all(
       collabRows.rows.map(async (c) => {
         const p = dataRouter.postgres.getReadPool(c.owner_shard_id, true);
-        const r = await p.query(`SELECT project_id, org_id, title, status FROM projects WHERE project_id = $1`, [
-          c.project_id,
-        ]);
+        const r = await p.query(
+          `SELECT p.project_id, p.org_id, p.title, p.description, p.status, p.created_at,
+                  (SELECT COUNT(*)::int FROM stages s WHERE s.project_id = p.project_id) AS stages_count,
+                  (SELECT COUNT(*)::int FROM tasks t WHERE t.project_id = p.project_id) AS tasks_count,
+                  (SELECT COUNT(*)::int FROM tasks t WHERE t.project_id = p.project_id AND t.status IN ('COMPLETED', 'VERIFIED', 'SUBMITTED')) AS completed_tasks_count
+           FROM projects p WHERE p.project_id = $1`,
+          [c.project_id],
+        );
         return r.rows[0];
       }),
     );
@@ -86,7 +111,12 @@ export const ProjectService = {
       projectId: p.project_id,
       orgId: p.org_id,
       title: p.title,
+      description: p.description ?? '',
       status: p.status,
+      createdAt: p.created_at ? new Date(p.created_at).toISOString() : new Date().toISOString(),
+      stagesCount: Number(p.stages_count ?? 0),
+      tasksCount: Number(p.tasks_count ?? 0),
+      completedTasksCount: Number(p.completed_tasks_count ?? 0),
       stages: [],
     }));
   },
@@ -94,20 +124,29 @@ export const ProjectService = {
   async getProjectTree(auth: AuthContext, projectId: string) {
     const { ownerShardId, roleCtx } = await this.resolveAccess(auth.userId, auth.activeOrgId, projectId);
     const pool = dataRouter.postgres.getReadPool(ownerShardId, true);
-    const pr = await pool.query(`SELECT project_id, org_id, title, status FROM projects WHERE project_id = $1`, [
-      projectId,
-    ]);
+    const pr = await pool.query(
+      `SELECT project_id, org_id, title, description, status, created_at FROM projects WHERE project_id = $1`,
+      [projectId],
+    );
     if (pr.rows.length === 0) return null;
 
     const stages = await pool.query(
-      `SELECT stage_id, name, order_index, status FROM stages WHERE project_id = $1 ORDER BY order_index ASC`,
+      `SELECT stage_id, name, order_index, status, deadline FROM stages WHERE project_id = $1 ORDER BY order_index ASC`,
       [projectId],
     );
     const tasks = await pool.query(
-      `SELECT t.task_id, t.stage_id, t.title, t.task_type, t.status, t.assigned_user_id, t.deadline, t.completed_at, s.overall_efficiency
-       FROM tasks t LEFT JOIN task_efficiency_scores s ON s.task_id = t.task_id WHERE t.project_id = $1`,
+      `SELECT t.task_id, t.stage_id, t.title, t.description, t.task_type, t.status, t.assigned_user_id, t.deadline, t.completed_at, t.checklist, t.file_requirements, t.text_inputs, s.overall_efficiency
+       FROM tasks t LEFT JOIN task_efficiency_scores s ON s.task_id = t.task_id WHERE t.project_id = $1 ORDER BY t.created_at ASC`,
       [projectId],
     );
+
+    const collabRes = await dataRouter.postgres
+      .getGlobalPool()
+      .query(
+        `SELECT c.partner_org_id, c.user_id, c.project_role_name, c.allocated_stage_ids, u.full_name, u.email
+         FROM project_collaborators c LEFT JOIN users u ON u.user_id = c.user_id WHERE c.project_id = $1`,
+        [projectId],
+      );
 
     const visibleStages = stages.rows.filter(
       (st) =>
@@ -120,30 +159,39 @@ export const ProjectService = {
       projectId: pr.rows[0].project_id,
       orgId: pr.rows[0].org_id,
       title: pr.rows[0].title,
+      description: pr.rows[0].description ?? '',
       status: pr.rows[0].status,
+      createdAt: pr.rows[0].created_at ? new Date(pr.rows[0].created_at).toISOString() : null,
+      collaborators: collabRes.rows,
       stages: visibleStages.map((st) => ({
         stageId: st.stage_id,
         name: st.name,
         orderIndex: st.order_index,
         status: st.status,
+        deadline: st.deadline ? new Date(st.deadline).toISOString() : null,
         tasks: tasks.rows
           .filter((t) => t.stage_id === st.stage_id)
           .map((t) => ({
             taskId: t.task_id,
             stageId: t.stage_id,
+            projectId,
             title: t.title,
+            description: t.description ?? '',
             taskType: t.task_type,
             status: t.status,
             assignedUserId: t.assigned_user_id,
             deadline: t.deadline ? new Date(t.deadline).toISOString() : null,
             completedAt: t.completed_at ? new Date(t.completed_at).toISOString() : null,
             efficiencyScore: t.overall_efficiency ? Number(t.overall_efficiency) : null,
+            checklist: t.checklist ?? [],
+            fileRequirements: t.file_requirements ?? [],
+            textInputs: t.text_inputs ?? {},
           })),
       })),
     };
   },
 
-  async createProject(auth: AuthContext, title: string, description?: string) {
+  async createProject(auth: AuthContext, title: string, description?: string, template?: string) {
     const roleCtx = await this.getOrgMemberRoleContext(auth.activeOrgId, auth.shardId, auth.userId);
     if (!hasPermission(roleCtx, PERMISSION_FLAGS.PROJECT_CREATE)) {
       throw new AppError(403, 'Forbidden: requires project.create');
@@ -156,7 +204,20 @@ export const ProjectService = {
        VALUES ($1, $2, $3, $4, 'ACTIVE', $5)`,
       [projectId, auth.activeOrgId, title, description ?? null, auth.userId],
     );
-    return { projectId, orgId: auth.activeOrgId, title, status: 'ACTIVE', stages: [] };
+
+    const stageNames = STAGE_TEMPLATES[template || 'standard'] || STAGE_TEMPLATES.standard;
+    const createdStages: Array<{ stageId: string; name: string; orderIndex: number; status: string; tasks: unknown[] }> = [];
+    for (let i = 0; i < stageNames.length; i++) {
+      const stageId = generatePrefixedId('STG');
+      await pool.query(
+        `INSERT INTO stages (stage_id, project_id, org_id, name, order_index) VALUES ($1, $2, $3, $4, $5)`,
+        [stageId, projectId, auth.activeOrgId, stageNames[i], i + 1],
+      );
+      createdStages.push({ stageId, name: stageNames[i], orderIndex: i + 1, status: 'PENDING', tasks: [] });
+    }
+
+    emitProjectEvent(projectId, 'project:updated', { projectId, action: 'CREATED' });
+    return { projectId, orgId: auth.activeOrgId, title, description: description ?? '', status: 'ACTIVE', stages: createdStages };
   },
 
   async createStage(auth: AuthContext, projectId: string, name: string, orderIndex: number) {
@@ -174,12 +235,108 @@ export const ProjectService = {
         name,
         orderIndex,
       ]);
+    emitProjectEvent(projectId, 'project:updated', { projectId, action: 'STAGE_CREATED', stageId });
     return { stageId, name, orderIndex, status: 'PENDING', tasks: [] };
+  },
+
+  async listTasks(auth: AuthContext, filters: { projectId?: string; assignedToMe?: boolean }) {
+    const pool = dataRouter.postgres.getReadPool(auth.shardId, true);
+    const params: unknown[] = [auth.activeOrgId];
+    let where = `t.org_id = $1`;
+    if (filters.projectId) {
+      params.push(filters.projectId);
+      where += ` AND t.project_id = $${params.length}`;
+    }
+    if (filters.assignedToMe) {
+      params.push(auth.userId);
+      where += ` AND t.assigned_user_id = $${params.length}`;
+    }
+
+    const res = await pool.query(
+      `SELECT t.task_id, t.stage_id, t.project_id, t.title, t.description, t.task_type, t.status,
+              t.assigned_user_id, t.deadline, t.completed_at, t.checklist, t.file_requirements, t.text_inputs,
+              s.name AS stage_name, p.title AS project_title, e.overall_efficiency
+       FROM tasks t
+       JOIN stages s ON s.stage_id = t.stage_id
+       JOIN projects p ON p.project_id = t.project_id
+       LEFT JOIN task_efficiency_scores e ON e.task_id = t.task_id
+       WHERE ${where}
+       ORDER BY t.created_at DESC`,
+      params,
+    );
+
+    return res.rows.map((r) => ({
+      taskId: r.task_id,
+      stageId: r.stage_id,
+      projectId: r.project_id,
+      stageName: r.stage_name,
+      projectTitle: r.project_title,
+      title: r.title,
+      description: r.description ?? '',
+      taskType: r.task_type,
+      status: r.status,
+      assignedUserId: r.assigned_user_id,
+      deadline: r.deadline ? new Date(r.deadline).toISOString() : null,
+      completedAt: r.completed_at ? new Date(r.completed_at).toISOString() : null,
+      efficiencyScore: r.overall_efficiency ? Number(r.overall_efficiency) : null,
+      checklist: r.checklist ?? [],
+      fileRequirements: r.file_requirements ?? [],
+      textInputs: r.text_inputs ?? {},
+    }));
+  },
+
+  async getTaskById(auth: AuthContext, taskId: string) {
+    const pool = dataRouter.postgres.getReadPool(auth.shardId, true);
+    const res = await pool.query(
+      `SELECT t.*, s.name AS stage_name, p.title AS project_title, e.overall_efficiency
+       FROM tasks t
+       JOIN stages s ON s.stage_id = t.stage_id
+       JOIN projects p ON p.project_id = t.project_id
+       LEFT JOIN task_efficiency_scores e ON e.task_id = t.task_id
+       WHERE t.task_id = $1 AND t.org_id = $2`,
+      [taskId, auth.activeOrgId],
+    );
+    if (res.rows.length === 0) throw new AppError(404, 'Task not found');
+    const r = res.rows[0];
+    const transitions = await pool.query(
+      `SELECT transition_id, from_status, to_status, actor_user_id, notes, created_at
+       FROM workflow_transitions WHERE entity_id = $1 ORDER BY created_at DESC LIMIT 20`,
+      [taskId],
+    );
+    return {
+      taskId: r.task_id,
+      stageId: r.stage_id,
+      projectId: r.project_id,
+      stageName: r.stage_name,
+      projectTitle: r.project_title,
+      title: r.title,
+      description: r.description ?? '',
+      taskType: r.task_type,
+      status: r.status,
+      assignedUserId: r.assigned_user_id,
+      deadline: r.deadline ? new Date(r.deadline).toISOString() : null,
+      completedAt: r.completed_at ? new Date(r.completed_at).toISOString() : null,
+      efficiencyScore: r.overall_efficiency ? Number(r.overall_efficiency) : null,
+      checklist: r.checklist ?? [],
+      fileRequirements: r.file_requirements ?? [],
+      textInputs: r.text_inputs ?? {},
+      transitions: transitions.rows,
+    };
   },
 
   async createTask(
     auth: AuthContext,
-    args: { projectId: string; stageId: string; title: string; taskType?: string; assignedUserId?: string; deadline?: string },
+    args: {
+      projectId: string;
+      stageId: string;
+      title: string;
+      description?: string;
+      taskType?: string;
+      assignedUserId?: string;
+      deadline?: string;
+      checklist?: Array<{ id: string; label: string; completed: boolean; required?: boolean }>;
+      fileRequirements?: Array<{ id: string; label: string; fileType: string; required?: boolean }>;
+    },
   ) {
     const { ownerOrgId, ownerShardId, roleCtx } = await this.resolveAccess(
       auth.userId,
@@ -211,29 +368,41 @@ export const ProjectService = {
     }
 
     const taskId = generatePrefixedId('TSK');
+    const checklist = args.checklist ?? [];
+    const fileRequirements = args.fileRequirements ?? [];
+
     await dataRouter.postgres.getPrimaryPool(ownerShardId).query(
-      `INSERT INTO tasks (task_id, stage_id, project_id, org_id, title, task_type, assigned_user_id, deadline)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      `INSERT INTO tasks (task_id, stage_id, project_id, org_id, title, description, task_type, assigned_user_id, deadline, checklist, file_requirements)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11::jsonb)`,
       [
         taskId,
         args.stageId,
         args.projectId,
         ownerOrgId,
         args.title,
+        args.description ?? null,
         args.taskType ?? 'ON_FIELD',
         args.assignedUserId ?? null,
         args.deadline ?? null,
+        JSON.stringify(checklist),
+        JSON.stringify(fileRequirements),
       ],
     );
+
+    emitProjectEvent(args.projectId, 'task:updated', { taskId, status: 'TODO', action: 'CREATED' });
     return {
       taskId,
       stageId: args.stageId,
+      projectId: args.projectId,
       title: args.title,
+      description: args.description ?? '',
       taskType: args.taskType ?? 'ON_FIELD',
       status: 'TODO',
       assignedUserId: args.assignedUserId ?? null,
       deadline: args.deadline ?? null,
       completedAt: null,
+      checklist,
+      fileRequirements,
     };
   },
 

@@ -59,3 +59,19 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
   revoked BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS org_invitations (
+  invite_id VARCHAR(32) PRIMARY KEY,
+  token VARCHAR(64) NOT NULL UNIQUE,
+  org_id VARCHAR(16) NOT NULL REFERENCES org_directory(org_id) ON DELETE CASCADE,
+  org_name VARCHAR(255) NOT NULL,
+  shard_id SMALLINT NOT NULL CHECK (shard_id IN (1, 2, 3)),
+  email VARCHAR(255) NOT NULL,
+  role_id VARCHAR(64) NOT NULL,
+  role_name VARCHAR(100) NOT NULL,
+  invited_by VARCHAR(32) NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '7 days'),
+  accepted_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_org_inv_token ON org_invitations(token);
