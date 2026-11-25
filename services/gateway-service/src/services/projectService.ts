@@ -248,7 +248,7 @@ export const ProjectService = {
     );
     const pool = dataRouter.postgres.getPrimaryPool(ownerShardId);
     const taskRes = await pool.query(
-      `SELECT task_id, stage_id, status, assigned_user_id FROM tasks WHERE task_id = $1 AND project_id = $2`,
+      `SELECT task_id, stage_id, status, assigned_user_id, checklist FROM tasks WHERE task_id = $1 AND project_id = $2`,
       [args.taskId, args.projectId],
     );
     if (taskRes.rows.length === 0) {
@@ -264,6 +264,15 @@ export const ProjectService = {
     }
     if (!roleCtx.isExternalCollaborator && !isAssignee && !canAccessStage(roleCtx, task.stage_id)) {
       throw new AppError(403, 'Forbidden: stage is not allocated to your role');
+    }
+
+    // Strict validation: cannot complete task if checklist items are incomplete
+    if (targetStatus === 'COMPLETED' || targetStatus === 'SUBMITTED' || targetStatus === 'VERIFIED') {
+      const checklistItems = Array.isArray(task.checklist) ? task.checklist : [];
+      const unverified = checklistItems.filter((i: { completed?: boolean; label?: string }) => !i.completed);
+      if (unverified.length > 0) {
+        throw new AppError(400, `Cannot mark task ${targetStatus}: ${unverified.length} checklist item(s) must be verified and checked first`);
+      }
     }
 
     if (targetStatus === 'VERIFIED' || targetStatus === 'REJECTED') {
@@ -285,7 +294,7 @@ export const ProjectService = {
            completed_at = CASE WHEN $2 THEN COALESCE(completed_at, NOW()) ELSE completed_at END,
            updated_at = NOW()
        WHERE task_id = $3
-       RETURNING task_id, stage_id, title, task_type, status, assigned_user_id, deadline, completed_at`,
+       RETURNING task_id, stage_id, title, task_type, status, assigned_user_id, deadline, completed_at, checklist, file_requirements, text_inputs`,
       [targetStatus, isDone, args.taskId],
     );
 
@@ -305,7 +314,65 @@ export const ProjectService = {
       assignedUserId: row.assigned_user_id,
       deadline: row.deadline ? new Date(row.deadline).toISOString() : null,
       completedAt: row.completed_at ? new Date(row.completed_at).toISOString() : null,
+      checklist: row.checklist,
+      fileRequirements: row.file_requirements,
+      textInputs: row.text_inputs,
     };
+  },
+
+  async updateTaskChecklist(
+    auth: AuthContext,
+    args: {
+      projectId: string;
+      taskId: string;
+      checklist?: Array<{ id: string; label: string; completed: boolean; required?: boolean }>;
+      fileRequirements?: Array<{ id: string; label: string; required?: boolean; fileType?: string; fileId?: string }>;
+      textInputs?: Record<string, string>;
+    },
+  ) {
+    const { ownerShardId } = await this.resolveAccess(auth.userId, auth.activeOrgId, args.projectId);
+    const pool = dataRouter.postgres.getPrimaryPool(ownerShardId);
+
+    const res = await pool.query(
+      `UPDATE tasks
+       SET checklist = COALESCE($1::jsonb, checklist),
+           file_requirements = COALESCE($2::jsonb, file_requirements),
+           text_inputs = COALESCE($3::jsonb, text_inputs),
+           updated_at = NOW()
+       WHERE task_id = $4 AND project_id = $5
+       RETURNING task_id, stage_id, title, status, checklist, file_requirements, text_inputs`,
+      [
+        args.checklist ? JSON.stringify(args.checklist) : null,
+        args.fileRequirements ? JSON.stringify(args.fileRequirements) : null,
+        args.textInputs ? JSON.stringify(args.textInputs) : null,
+        args.taskId,
+        args.projectId,
+      ],
+    );
+
+    if (res.rows.length === 0) {
+      throw new AppError(404, 'Task not found in project');
+    }
+    const r = res.rows[0];
+    return {
+      taskId: r.task_id,
+      stageId: r.stage_id,
+      title: r.title,
+      status: r.status,
+      checklist: r.checklist,
+      fileRequirements: r.file_requirements,
+      textInputs: r.text_inputs,
+    };
+  },
+
+  async analyzeProjectProgress(auth: AuthContext, projectId: string) {
+    const { ownerOrgId } = await this.resolveAccess(auth.userId, auth.activeOrgId, projectId);
+    const result = await grpcCall(aiClient.AnalyzeProjectProgress.bind(aiClient), {
+      org_id: ownerOrgId,
+      project_id: projectId,
+      user_id: auth.userId,
+    });
+    return result;
   },
 
   async invitePartnerOrg(

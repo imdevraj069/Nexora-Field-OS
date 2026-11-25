@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { motion } from 'motion/react';
 import {
   ArrowLeft,
@@ -15,13 +15,27 @@ import {
   FileCheck,
   Shield,
   Navigation,
+  Mic,
+  Video,
+  FileText,
+  AlertCircle,
+  Plus,
 } from 'lucide-react';
 import { useWorkspaceAuth } from '@/hooks/useWorkspaceAuth';
 import { apiRequest } from '@/services/nexoraClient';
 
+interface ChecklistItem {
+  id: string;
+  label: string;
+  completed: boolean;
+  required?: boolean;
+}
+
 export default function TaskExecutionView() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const taskId = params?.taskId as string;
+  const projectIdFromUrl = searchParams.get('projectId') || 'PRJ-DEFAULT';
   const { activeOrg, token, user } = useWorkspaceAuth();
 
   const [task, setTask] = useState<any>({
@@ -30,32 +44,142 @@ export default function TaskExecutionView() {
     taskType: 'FIELD_INSPECTION',
     status: 'ON_FIELD',
     deadline: '2026-11-26',
-    efficiencyScore: 98,
-    assignedUserId: 'devraj',
+    assignedUserId: user?.fullName || 'devraj',
     notes: 'Verify 28-day cylinder compressive strength report. Inspect anchor bolts positioning.',
+    checklist: [
+      { id: 'chk-1', label: 'Verify concrete batch mix delivery ticket & slump test', completed: true, required: true },
+      { id: 'chk-2', label: 'Inspect rebar clearance, chair blocks & anchor cage bolts', completed: false, required: true },
+      { id: 'chk-3', label: 'Record high-voltage earthing grid continuity resistance (Ohms)', completed: false, required: true },
+    ],
+    fileRequirements: [
+      { id: 'fr-1', label: 'High-res foundation pour site photo', fileType: 'IMAGE', required: true },
+      { id: 'fr-2', label: 'Field technician voice/video notes explaining test result', fileType: 'AUDIO/VIDEO', required: false },
+    ],
+    textInputs: {
+      siteObservations: 'Concrete slump measured 110mm. Vibrator compacting in progress.',
+    },
   });
 
   const [updating, setUpdating] = useState(false);
-  const [proofUploaded, setProofUploaded] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [newChecklistText, setNewChecklistText] = useState('');
+  const [textNote, setTextNote] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadingEvidence, setUploadingEvidence] = useState(false);
+  const [evidenceSuccess, setEvidenceSuccess] = useState('');
 
-  async function updateStatus(newStatus: string) {
-    if (!token || !activeOrg) return;
-    setUpdating(true);
-    try {
+  // Toggle checklist item
+  async function toggleChecklist(itemIndex: number) {
+    const updated = [...task.checklist];
+    updated[itemIndex].completed = !updated[itemIndex].completed;
+    setTask((prev: any) => ({ ...prev, checklist: updated }));
+
+    if (token) {
       await apiRequest(
-        `/api/v1/tasks/${taskId}/status?orgId=${activeOrg.org_id}`,
+        `/api/v1/projects/${projectIdFromUrl}/tasks/${taskId}/checklist`,
         {
           method: 'PATCH',
-          body: JSON.stringify({ status: newStatus }),
+          body: JSON.stringify({ checklist: updated }),
         },
         token
-      );
+      ).catch(() => {});
+    }
+  }
+
+  // Add new checklist item
+  async function addChecklistItem(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newChecklistText.trim()) return;
+    const newItem: ChecklistItem = {
+      id: `chk-${Date.now()}`,
+      label: newChecklistText.trim(),
+      completed: false,
+      required: true,
+    };
+    const updated = [...task.checklist, newItem];
+    setTask((prev: any) => ({ ...prev, checklist: updated }));
+    setNewChecklistText('');
+
+    if (token) {
+      await apiRequest(
+        `/api/v1/projects/${projectIdFromUrl}/tasks/${taskId}/checklist`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ checklist: updated }),
+        },
+        token
+      ).catch(() => {});
+    }
+  }
+
+  // Advance lifecycle state
+  async function updateStatus(newStatus: string) {
+    setErrorMsg('');
+    // Client-side checklist guard
+    if (newStatus === 'COMPLETED' || newStatus === 'SUBMITTED' || newStatus === 'VERIFIED') {
+      const pending = task.checklist.filter((i: ChecklistItem) => !i.completed);
+      if (pending.length > 0) {
+        setErrorMsg(`Action Blocked: ${pending.length} checklist item(s) must be checked and verified first.`);
+        return;
+      }
+    }
+
+    setUpdating(true);
+    try {
+      if (token) {
+        await apiRequest(
+          `/api/v1/projects/${projectIdFromUrl}/tasks/${taskId}/status`,
+          {
+            method: 'PATCH',
+            body: JSON.stringify({ status: newStatus }),
+          },
+          token
+        );
+      }
       setTask((prev: any) => ({ ...prev, status: newStatus }));
-    } catch {
-      // Mock local optimistic advance
-      setTask((prev: any) => ({ ...prev, status: newStatus }));
+    } catch (err) {
+      setErrorMsg((err as Error).message || 'Failed to update task status');
     } finally {
       setUpdating(false);
+    }
+  }
+
+  // Upload proof of work (Photo, Video, Audio/Voice Note)
+  async function handleUploadEvidence(e: React.FormEvent) {
+    e.preventDefault();
+    if (!selectedFile && !textNote.trim()) {
+      alert('Please select an audio/video/image file or enter a voice transcript / note.');
+      return;
+    }
+
+    setUploadingEvidence(true);
+    setEvidenceSuccess('');
+    try {
+      const formData = new FormData();
+      if (selectedFile) formData.append('file', selectedFile);
+      formData.append('textNote', textNote);
+
+      const resp = await fetch(
+        `/api/v1/projects/${projectIdFromUrl}/tasks/${taskId}/evidence`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: formData,
+        }
+      );
+      if (!resp.ok) {
+        const errJson = await resp.json().catch(() => ({}));
+        throw new Error(errJson.error || 'Failed to upload evidence');
+      }
+      setEvidenceSuccess('Evidence recorded! Gemini 2.5 Flash queued for mixed-language audio & visual analysis.');
+      setSelectedFile(null);
+      setTextNote('');
+    } catch (err) {
+      alert((err as Error).message || 'Failed to submit evidence');
+    } finally {
+      setUploadingEvidence(false);
     }
   }
 
@@ -97,6 +221,76 @@ export default function TaskExecutionView() {
         </div>
       </div>
 
+      {errorMsg && (
+        <div className="flex items-center gap-2 p-3.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300 text-xs">
+          <AlertCircle size={16} />
+          <span>{errorMsg}</span>
+        </div>
+      )}
+
+      {/* Pre-completion Field Checklist */}
+      <div className="rounded-2xl border border-white/[0.06] bg-[#121215]/90 p-6 shadow-xl">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="font-display text-sm font-semibold text-white flex items-center gap-2">
+              <FileCheck size={16} className="text-orange-400" />
+              Pre-Completion Verification Checklist (Mandatory)
+            </h2>
+            <p className="text-[11px] text-zinc-400 mt-0.5">
+              All checklist items must be verified before marking task as Submitted or Completed.
+            </p>
+          </div>
+          <span className="text-xs font-mono text-zinc-400">
+            {task.checklist.filter((i: ChecklistItem) => i.completed).length} / {task.checklist.length} Done
+          </span>
+        </div>
+
+        <div className="space-y-2 mb-4">
+          {task.checklist.map((item: ChecklistItem, idx: number) => (
+            <label
+              key={item.id}
+              className={`flex items-center gap-3 p-3 rounded-xl border transition-colors cursor-pointer select-none ${
+                item.completed
+                  ? 'border-emerald-500/30 bg-emerald-500/5 text-zinc-200'
+                  : 'border-white/[0.06] bg-[#18181b]/40 text-zinc-300 hover:border-white/[0.15]'
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={item.completed}
+                onChange={() => void toggleChecklist(idx)}
+                className="h-4 w-4 rounded border-zinc-700 bg-zinc-800 text-orange-500 focus:ring-orange-500/30 cursor-pointer"
+              />
+              <span className={`text-xs flex-1 ${item.completed ? 'line-through text-zinc-400' : ''}`}>
+                {item.label}
+              </span>
+              {item.required && (
+                <span className="font-mono text-[9px] uppercase px-1.5 py-0.5 rounded bg-zinc-800 text-amber-400/90 border border-amber-500/20">
+                  Required
+                </span>
+              )}
+            </label>
+          ))}
+        </div>
+
+        {/* Add new checklist item form */}
+        <form onSubmit={addChecklistItem} className="flex gap-2">
+          <input
+            type="text"
+            value={newChecklistText}
+            onChange={(e) => setNewChecklistText(e.target.value)}
+            placeholder="Add new required verification item..."
+            className="flex-1 rounded-xl border border-white/[0.08] bg-[#18181b] px-3.5 py-2 text-xs text-white placeholder-zinc-500 focus:border-orange-500 focus:outline-none"
+          />
+          <button
+            type="submit"
+            className="flex items-center gap-1 rounded-xl bg-[#27272a] hover:bg-zinc-700 px-3 py-2 text-xs font-semibold text-white transition-colors cursor-pointer"
+          >
+            <Plus size={13} /> Add
+          </button>
+        </form>
+      </div>
+
       {/* Mobile-Friendly Tactile Field Control Strip */}
       <div className="rounded-2xl border border-white/[0.06] bg-[#121215]/90 p-6 shadow-xl">
         <h2 className="font-display text-sm font-semibold text-white mb-4 flex items-center gap-2">
@@ -128,28 +322,71 @@ export default function TaskExecutionView() {
         </div>
       </div>
 
-      {/* Proof of Work Capture Area */}
+      {/* Proof of Work Capture Area: Image, Video, Audio/Voice note & Text Inputs */}
       <div className="rounded-2xl border border-white/[0.06] bg-[#121215]/90 p-6 shadow-xl">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-display text-sm font-semibold text-white flex items-center gap-2">
             <UploadCloud size={16} className="text-orange-400" />
-            Proof of Work Verification (MinIO Storage Service)
+            Proof of Work Verification (MinIO + Gemini 2.5 Analysis)
           </h2>
-          {proofUploaded && (
-            <span className="text-emerald-400 text-xs font-mono flex items-center gap-1">
-              <CheckCircle2 size={13} /> Stored to S3 bucket: nexora-field-proofs
-            </span>
-          )}
+          <div className="flex items-center gap-2 text-zinc-400 text-xs font-mono">
+            <span className="flex items-center gap-1"><Mic size={12} className="text-orange-400" /> Voice/Audio</span>
+            <span className="flex items-center gap-1"><Video size={12} className="text-sky-400" /> Video</span>
+            <span className="flex items-center gap-1"><FileText size={12} className="text-emerald-400" /> Photo/Doc</span>
+          </div>
         </div>
 
-        <div
-          onClick={() => setProofUploaded(true)}
-          className="border-2 border-dashed border-white/[0.08] rounded-xl p-8 text-center hover:border-orange-500/40 transition-colors cursor-pointer bg-[#18181b]/30"
-        >
-          <UploadCloud size={28} className="mx-auto text-zinc-500 mb-2" />
-          <p className="text-xs font-semibold text-zinc-300">Tap to capture or upload site photo proof</p>
-          <p className="text-[11px] text-zinc-500 mt-1">Automatic EXIF timestamp and GPS geofence stamping</p>
-        </div>
+        {evidenceSuccess && (
+          <div className="mb-4 flex items-center gap-2 p-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 text-xs">
+            <CheckCircle2 size={15} />
+            <span>{evidenceSuccess}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleUploadEvidence} className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-zinc-300 mb-1.5">
+                Upload Proof File (Image / Video / Audio Voice Note)
+              </label>
+              <input
+                type="file"
+                accept="image/*,video/*,audio/*,.pdf"
+                onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                className="w-full text-xs text-zinc-400 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-orange-500/10 file:text-orange-400 hover:file:bg-orange-500/20 cursor-pointer"
+              />
+              {selectedFile && (
+                <p className="text-[11px] font-mono text-zinc-400 mt-1">
+                  Selected: {selectedFile.name} ({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-zinc-300 mb-1.5">
+                Field Observations / Voice Transcript (Multi & Mixed Language)
+              </label>
+              <textarea
+                value={textNote}
+                onChange={(e) => setTextNote(e.target.value)}
+                placeholder="Enter field notes, observations, or speak in Hindi/English/Hinglish/regional dialect..."
+                rows={3}
+                className="w-full rounded-xl border border-white/[0.08] bg-[#18181b] p-2.5 text-xs text-white placeholder-zinc-500 focus:border-orange-500 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={uploadingEvidence}
+              className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-red-600 via-orange-600 to-orange-500 px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-orange-950/40 hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50"
+            >
+              <UploadCloud size={14} className={uploadingEvidence ? 'animate-bounce' : ''} />
+              {uploadingEvidence ? 'Uploading & Analyzing...' : 'Submit Evidence Proof'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

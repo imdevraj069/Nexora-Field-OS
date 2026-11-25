@@ -78,6 +78,9 @@ CREATE TABLE IF NOT EXISTS tasks (
   deadline TIMESTAMPTZ,
   completed_at TIMESTAMPTZ,
   checklist_schema JSONB NOT NULL DEFAULT '[]'::jsonb,
+  checklist JSONB NOT NULL DEFAULT '[]'::jsonb,
+  file_requirements JSONB NOT NULL DEFAULT '[]'::jsonb,
+  text_inputs JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

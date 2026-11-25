@@ -33,6 +33,20 @@ export const GatewayController = {
     });
     res.json(result);
   },
+  updateChecklist: async (req: AuthedRequest, res: Response) => {
+    const result = await ProjectService.updateTaskChecklist(req.auth!, {
+      projectId: String(req.params.projectId),
+      taskId: String(req.params.taskId),
+      checklist: req.body.checklist,
+      fileRequirements: req.body.fileRequirements,
+      textInputs: req.body.textInputs,
+    });
+    res.json(result);
+  },
+  analyzeProjectProgress: async (req: AuthedRequest, res: Response) => {
+    const result = await ProjectService.analyzeProjectProgress(req.auth!, String(req.params.projectId));
+    res.json(result);
+  },
   submitEvidence: async (req: AuthedRequest, res: Response) => {
     const result = await ProjectService.submitEvidence(
       req.auth!,

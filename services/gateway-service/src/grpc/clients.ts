@@ -33,6 +33,10 @@ export const aiClient = loadGrpcClient<{
     req: { org_id: string; prompt: string; industry_hint: string },
     cb: grpc.sendUnaryData<Record<string, unknown>>,
   ) => void;
+  AnalyzeProjectProgress: (
+    req: { org_id: string; project_id: string; user_id: string },
+    cb: grpc.sendUnaryData<Record<string, unknown>>,
+  ) => void;
 }>(AI_PROTO_PATH, ['nexora', 'ai', 'AiGovernanceService'], gatewayEnv.aiGrpcUrl);
 
 export function grpcCall<TReq, TRes>(

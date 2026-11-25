@@ -23,6 +23,21 @@ export function startAiGrpcServer(): void {
         callback(err as grpc.ServiceError);
       }
     },
+    AnalyzeProjectProgress: async (
+      call: grpc.ServerUnaryCall<{ org_id: string; project_id: string; user_id: string }, unknown>,
+      callback: grpc.sendUnaryData<unknown>,
+    ) => {
+      try {
+        const result = await AiService.analyzeProjectProgress(
+          call.request.org_id,
+          call.request.project_id,
+          call.request.user_id,
+        );
+        callback(null, result);
+      } catch (err) {
+        callback(err as grpc.ServiceError);
+      }
+    },
   });
 
   server.bindAsync(`0.0.0.0:${aiEnv.grpcPort}`, grpc.ServerCredentials.createInsecure(), () => {

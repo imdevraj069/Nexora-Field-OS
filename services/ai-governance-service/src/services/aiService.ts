@@ -24,7 +24,7 @@ export const AiService = {
                 {
                   parts: [
                     {
-                      text: `Convert this field operations project request into JSON with {suggested_title, summary, stages: [{name, order_index, recommended_role}]}. Request: ${prompt}`,
+                      text: `Convert this field operations project request into JSON with {suggested_title, summary, stages: [{name, order_index, recommended_role, tasks: [{title, description, checklist_items: []}]}]}. Request: ${prompt}`,
                     },
                   ],
                 },
@@ -49,27 +49,94 @@ export const AiService = {
       suggested_title: `Field Rollout: ${prompt.slice(0, 48)}`,
       summary: `AI-structured execution plan for ${industryHint || 'field operations'}`,
       stages: [
-        { name: 'Lead & Material Procurement', order_index: 1, recommended_role: 'Manager' },
-        { name: 'Transit & Logistics Dispatch', order_index: 2, recommended_role: 'Transit Partner' },
-        { name: 'On-Field Execution & Evidence', order_index: 3, recommended_role: 'Field Worker' },
-        { name: 'Supervisor Verification & Handover', order_index: 4, recommended_role: 'Supervisor' },
+        { name: 'Lead & Material Procurement', order_index: 1, recommended_role: 'Manager', tasks: [] },
+        { name: 'Transit & Logistics Dispatch', order_index: 2, recommended_role: 'Transit Partner', tasks: [] },
+        { name: 'On-Field Execution & Evidence', order_index: 3, recommended_role: 'Field Worker', tasks: [] },
+        { name: 'Supervisor Verification & Handover', order_index: 4, recommended_role: 'Supervisor', tasks: [] },
       ],
     };
   },
 
   async evaluateEvidenceJob(job: AiJobPayload): Promise<void> {
     let mediaSize = 0;
+    let base64Media: string | null = null;
+    let audioTranscript = '';
+    let detectedLanguages: string[] = [];
+
     if (job.fileId) {
-      const resp = await fetch(`${aiEnv.storageHttpUrl}/api/v1/storage/internal/files/${job.fileId}`, {
-        headers: {
-          'x-master-read-key': aiEnv.masterReadKey,
-          'x-project-id': job.projectId,
-          'x-org-id': job.orgId,
-        },
-      });
-      if (resp.ok) {
-        const buf = await resp.arrayBuffer();
-        mediaSize = buf.byteLength;
+      try {
+        const resp = await fetch(`${aiEnv.storageHttpUrl}/api/v1/storage/internal/files/${job.fileId}`, {
+          headers: {
+            'x-master-read-key': aiEnv.masterReadKey,
+            'x-project-id': job.projectId,
+            'x-org-id': job.orgId,
+          },
+        });
+        if (resp.ok) {
+          const buf = await resp.arrayBuffer();
+          mediaSize = buf.byteLength;
+          if (job.mimeType.startsWith('audio/') || job.mimeType.startsWith('video/') || job.mimeType.startsWith('image/')) {
+            base64Media = Buffer.from(buf).toString('base64');
+          }
+        }
+      } catch (e) {
+        console.warn('[ai-governance-service] Error fetching media for AI analysis:', (e as Error).message);
+      }
+    }
+
+    // Call Gemini 2.5 Flash for Multimodal Voice/Audio/Image Analysis with Multi-language identification
+    if (aiEnv.geminiApiKey && (base64Media || job.textNote)) {
+      try {
+        const parts: Array<Record<string, unknown>> = [];
+        if (base64Media) {
+          parts.push({
+            inlineData: {
+              mimeType: job.mimeType,
+              data: base64Media,
+            },
+          });
+        }
+        parts.push({
+          text: `You are Nexora Field OS AI Governance Inspector. Analyze this field submission proof (audio/voice note, video, image, and/or technician note).
+Support multi-language and mixed-language detection (e.g. English, Hindi, Hinglish, Spanish, Regional dialects).
+Technician Note: "${job.textNote || 'None provided'}"
+
+Return JSON strictly matching this schema:
+{
+  "transcript": "Full transcript or description of audio/evidence",
+  "identified_languages": ["Hindi", "English"],
+  "quality_score": 0-100,
+  "evidence_completeness": 0-100,
+  "summary": "Concise assessment of evidence against field task",
+  "risk_flags": ["ANY_RISK_FLAG"]
+}`,
+        });
+
+        const geminiResp = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${aiEnv.geminiModel}:generateContent?key=${aiEnv.geminiApiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts }],
+              generationConfig: { responseMimeType: 'application/json' },
+            }),
+          },
+        );
+
+        if (geminiResp.ok) {
+          const geminiData = (await geminiResp.json()) as {
+            candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+          };
+          const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (rawText) {
+            const parsed = JSON.parse(rawText);
+            audioTranscript = parsed.transcript || '';
+            detectedLanguages = parsed.identified_languages || [];
+          }
+        }
+      } catch (aiErr) {
+        console.warn('[ai-governance-service] Gemini evidence evaluation error:', (aiErr as Error).message);
       }
     }
 
@@ -110,10 +177,13 @@ export const AiService = {
         orgId: job.orgId,
         projectId: job.projectId,
         taskId: job.taskId,
+        userId: job.userId,
         fileId: job.fileId,
         mimeType: job.mimeType,
         mediaBytesAnalyzed: mediaSize,
         textNote: job.textNote,
+        audioTranscript,
+        identifiedLanguages: detectedLanguages,
         overallEfficiency: overall,
         riskFlags,
         createdAt: new Date(),
@@ -121,5 +191,115 @@ export const AiService = {
     } catch (err) {
       console.warn('[ai-governance-service] MongoDB log write skipped:', (err as Error).message);
     }
+  },
+
+  async analyzeProjectProgress(orgId: string, projectId: string, userId: string) {
+    const pgPool = dataRouter.postgres.getPrimaryForOrg(orgId);
+    const projRes = await pgPool.query(`SELECT * FROM projects WHERE project_id = $1`, [projectId]);
+    const stagesRes = await pgPool.query(`SELECT * FROM stages WHERE project_id = $1 ORDER BY order_index ASC`, [projectId]);
+    const tasksRes = await pgPool.query(`SELECT * FROM tasks WHERE project_id = $1`, [projectId]);
+
+    const totalTasks = tasksRes.rows.length;
+    const completedTasks = tasksRes.rows.filter(
+      (t) => t.status === 'COMPLETED' || t.status === 'VERIFIED' || t.status === 'SUBMITTED',
+    ).length;
+
+    let pendingChecklists = 0;
+    for (const t of tasksRes.rows) {
+      const items = Array.isArray(t.checklist) ? t.checklist : [];
+      pendingChecklists += items.filter((item: { completed?: boolean }) => !item.completed).length;
+    }
+
+    let mongoAnalyses: Array<Record<string, unknown>> = [];
+    try {
+      const mongoConn = await dataRouter.mongo.getConnectionForOrg(orgId);
+      mongoAnalyses = await mongoConn
+        .collection('ai_raw_analyses')
+        .find({ projectId })
+        .sort({ createdAt: -1 })
+        .toArray();
+    } catch {
+      // ignore
+    }
+
+    const totalFilesSubmitted = mongoAnalyses.filter((a) => a.fileId).length;
+    const allLanguages = new Set<string>();
+    const transcripts: string[] = [];
+    for (const a of mongoAnalyses) {
+      if (Array.isArray(a.identifiedLanguages)) {
+        a.identifiedLanguages.forEach((l) => allLanguages.add(String(l)));
+      }
+      if (a.audioTranscript) {
+        transcripts.push(String(a.audioTranscript));
+      }
+    }
+
+    const completionPercentage = totalTasks > 0 ? Number(((completedTasks / totalTasks) * 100).toFixed(1)) : 0;
+    let executiveSummary = `Project ${projRes.rows[0]?.title || projectId} is at ${completionPercentage}% progress across ${stagesRes.rows.length} stages and ${totalTasks} tasks.`;
+    let recommendations = 'Ensure pending checklist items are verified on-field before final supervisor signoff.';
+    let healthScore = 85.0;
+
+    // Call Gemini to generate intelligent synthesis
+    if (aiEnv.geminiApiKey) {
+      try {
+        const prompt = `You are Nexora Field OS Executive AI Governance Assistant.
+Analyze this field project progress on-demand for the Project Manager / Org Admin:
+Project: ${JSON.stringify(projRes.rows[0] || {})}
+Stages: ${JSON.stringify(stagesRes.rows)}
+Tasks: ${JSON.stringify(tasksRes.rows.map((t) => ({ title: t.title, status: t.status, checklist: t.checklist, file_requirements: t.file_requirements })))}
+Voice Transcripts / Media Submissions: ${JSON.stringify(transcripts.slice(0, 10))}
+Identified Languages in Field Submissions: ${Array.from(allLanguages).join(', ') || 'English'}
+
+Provide JSON response:
+{
+  "overall_health_score": 0-100,
+  "executive_summary": "Thorough executive breakdown of project milestones, execution speed, and field performance",
+  "risk_flags": ["ANY_RISK"],
+  "recommendations": "Actionable next steps for the field manager"
+}`;
+
+        const resp = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${aiEnv.geminiModel}:generateContent?key=${aiEnv.geminiApiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: { responseMimeType: 'application/json' },
+            }),
+          },
+        );
+
+        if (resp.ok) {
+          const gData = (await resp.json()) as {
+            candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+          };
+          const raw = gData.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            healthScore = Number(parsed.overall_health_score ?? 85);
+            executiveSummary = String(parsed.executive_summary ?? executiveSummary);
+            recommendations = String(parsed.recommendations ?? recommendations);
+          }
+        }
+      } catch (e) {
+        console.warn('[ai-governance-service] Error generating project AI synthesis:', (e as Error).message);
+      }
+    }
+
+    return {
+      project_id: projectId,
+      overall_health_score: healthScore,
+      completion_percentage: completionPercentage,
+      total_tasks: totalTasks,
+      completed_tasks: completedTasks,
+      pending_checklists: pendingChecklists,
+      total_files_submitted: totalFilesSubmitted,
+      identified_languages: Array.from(allLanguages),
+      voice_transcripts: transcripts.slice(0, 5),
+      risk_flags: pendingChecklists > 0 ? ['PENDING_UNVERIFIED_CHECKLISTS'] : [],
+      executive_summary: executiveSummary,
+      recommendations: recommendations,
+    };
   },
 };

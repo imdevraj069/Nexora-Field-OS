@@ -5,6 +5,28 @@ package nexora.ai;
 service AiGovernanceService {
   rpc GenerateProjectBlueprint (ProjectBlueprintRequest) returns (ProjectBlueprintResponse);
   rpc ComputeStageEfficiency (StageEfficiencyRequest) returns (StageEfficiencyResponse);
+  rpc AnalyzeProjectProgress (ProjectProgressAnalysisRequest) returns (ProjectProgressAnalysisResponse);
+}
+
+message ProjectProgressAnalysisRequest {
+  string org_id = 1;
+  string project_id = 2;
+  string user_id = 3;
+}
+
+message ProjectProgressAnalysisResponse {
+  string project_id = 1;
+  double overall_health_score = 2;
+  double completion_percentage = 3;
+  int32 total_tasks = 4;
+  int32 completed_tasks = 5;
+  int32 pending_checklists = 6;
+  int32 total_files_submitted = 7;
+  repeated string identified_languages = 8;
+  repeated string voice_transcripts = 9;
+  repeated string risk_flags = 10;
+  string executive_summary = 11;
+  string recommendations = 12;
 }
 
 message ProjectBlueprintRequest {
