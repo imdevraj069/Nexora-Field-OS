@@ -1,100 +1,141 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { motion } from 'motion/react';
 import {
-  ShieldCheck,
-  Zap,
-  Layers,
   ArrowRight,
-  CheckCircle2,
-  Lock,
-  Globe2,
-  Smartphone,
-  Cpu,
+  LogOut,
+  Moon,
+  ShieldCheck,
   Sparkles,
-  ChevronRight,
-  Database,
-  Users,
+  Sun,
 } from 'lucide-react';
 import { NexoraMark } from '../components/svg/NexoraMark';
-import { FadeIn } from '../components/ui/motion';
 import { useAuthStore } from '../stores/useAuthStore';
+import { useThemeStore } from '../stores/useThemeStore';
+import { RotatingWords } from '../components/landing/RotatingWords';
+import { CountUpMetric } from '../components/landing/CountUpMetric';
+import { ProjectJourneyScroll } from '../components/landing/ProjectJourneyScroll';
+import { FeatureBento } from '../components/landing/FeatureBento';
+import { WhyUsComparison } from '../components/landing/WhyUsComparison';
+import { FaqSection } from '../components/landing/FaqSection';
+
+const HeroScene3D = dynamic(
+  () => import('../components/landing/HeroScene3D').then((m) => m.HeroScene3D),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-[380px] sm:h-[440px] lg:h-[500px] w-full rounded-[32px] glass-card flex items-center justify-center text-xs font-semibold text-zinc-500">
+        Initializing 3D Command Topology...
+      </div>
+    ),
+  }
+);
 
 export default function MarketingLandingPage() {
-  const [activeTaskStep, setActiveTaskStep] = useState(2); // 0: TODO, 1: IN_TRANSIT, 2: ON_FIELD, 3: SUBMITTED, 4: VERIFIED
   const { isAuthenticated, user, activeOrg, isHydrated, logout } = useAuthStore();
-
-  const taskSteps = [
-    { label: 'Dispatch', status: 'TODO', time: '09:15 AM', desc: 'Task assigned to Field Engineer' },
-    { label: 'Transit', status: 'IN_TRANSIT', time: '09:42 AM', desc: 'GPS telematics geo-check passed' },
-    { label: 'On-Field', status: 'ON_FIELD', time: '10:05 AM', desc: 'Arrived at site: Foundation Stage 2' },
-    { label: 'Proof', status: 'SUBMITTED', time: '10:48 AM', desc: 'Photo proof & sensor logs uploaded' },
-    { label: 'AI Validated', status: 'VERIFIED', time: '10:50 AM', desc: 'AI Governance scored 98.4% efficiency' },
-  ];
+  const { theme, toggleTheme } = useThemeStore();
 
   return (
-    <div className="min-h-screen bg-[#09090b] text-zinc-100 selection:bg-orange-500/20 selection:text-orange-300">
-      {/* Ambient background glows */}
+    <div className="min-h-screen overflow-x-hidden bg-[#eef0f4] text-[#111318] selection:bg-orange-500/20 selection:text-orange-600">
+      {/* Subtle Architectural Background Grid & Warm Ambient Glows */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -top-40 left-1/2 -translate-x-1/2 h-[600px] w-[800px] rounded-full bg-gradient-to-b from-rose-600/10 via-orange-500/10 to-transparent blur-3xl opacity-80" />
-        <div className="absolute top-1/3 -left-48 h-[500px] w-[500px] rounded-full bg-orange-600/5 blur-3xl" />
-        <div className="absolute bottom-10 -right-48 h-[600px] w-[600px] rounded-full bg-rose-600/5 blur-3xl" />
+        <div
+          className="absolute inset-0 opacity-[0.35]"
+          style={{
+            backgroundImage:
+              'radial-gradient(rgba(15, 23, 42, 0.08) 1px, transparent 1px)',
+            backgroundSize: '28px 28px',
+          }}
+        />
+        <div className="absolute -top-44 left-1/2 -translate-x-1/2 h-[540px] w-[860px] rounded-full bg-gradient-to-b from-orange-400/15 via-red-400/10 to-transparent blur-3xl" />
       </div>
 
-      {/* Navigation Header */}
-      <header className="sticky top-0 z-50 border-b border-white/[0.06] bg-[#09090b]/80 backdrop-blur-xl">
+      {/* Sticky Floating Glass Header */}
+      <header className="sticky top-0 z-50 border-b border-zinc-200/70 bg-white/80 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <Link href="/" className="flex items-center gap-3 group cursor-pointer">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-red-600/20 via-orange-500/20 to-amber-500/10 border border-orange-500/30 shadow-inner group-hover:border-orange-500/50 transition-all">
-              <NexoraMark className="h-5 w-5 text-orange-400" />
+          <Link href="/" className="flex items-center gap-2.5 group cursor-pointer">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-tr from-red-600/15 via-orange-500/15 to-amber-500/10 border border-orange-500/30">
+              <NexoraMark className="h-5 w-5 text-orange-600" />
             </div>
             <div>
-              <span className="font-display text-base font-bold tracking-tight text-white">Nexora</span>
-              <span className="ml-1 text-[10px] font-mono text-orange-400 uppercase tracking-widest font-semibold">Field OS</span>
+              <span className="font-display text-base font-bold tracking-tight text-[#111318]">
+                Nexora
+              </span>
+              <span className="ml-1.5 text-[10px] uppercase tracking-widest font-bold text-orange-600">
+                Field OS
+              </span>
             </div>
           </Link>
 
-          <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-zinc-400">
-            <a href="#features" className="hover:text-white transition-colors">Architecture</a>
-            <a href="#collaboration" className="hover:text-white transition-colors">Cross-Tenant</a>
-            <a href="#pwa" className="hover:text-white transition-colors">Field PWA</a>
-            <a href="#pricing" className="hover:text-white transition-colors">Security</a>
+          <nav className="hidden md:flex items-center gap-7 text-sm font-semibold text-zinc-600">
+            <a href="#journey" className="hover:text-[#111318] transition-colors">
+              Project Journey
+            </a>
+            <a href="#features" className="hover:text-[#111318] transition-colors">
+              Capabilities
+            </a>
+            <a href="#why-us" className="hover:text-[#111318] transition-colors">
+              Why Nexora
+            </a>
+            <a href="#faq" className="hover:text-[#111318] transition-colors">
+              FAQ
+            </a>
           </nav>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={toggleTheme}
+              className="flex items-center gap-1.5 rounded-full glass-subtle px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:border-orange-500/40 cursor-pointer"
+              title="Toggle Light / Dark Theme"
+            >
+              {theme === 'light' ? (
+                <Moon size={13} className="text-orange-600" />
+              ) : (
+                <Sun size={13} className="text-orange-400" />
+              )}
+            </button>
+
             {isHydrated && isAuthenticated ? (
               <>
                 <Link
                   href="/dashboard"
-                  className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl border border-white/[0.08] bg-[#18181b] text-xs font-mono text-zinc-300 hover:text-white"
+                  className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full glass-subtle text-xs font-semibold text-zinc-700"
                 >
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
                   {activeOrg?.org_name || user?.fullName || 'Workspace'}
                 </Link>
                 <Link
                   href="/dashboard"
-                  className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-red-600 via-orange-600 to-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-orange-950/40 hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer"
+                  className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-[#ff3b30] to-[#f97316] px-4 py-2 text-xs sm:text-sm font-semibold text-white shadow-md shadow-orange-500/20 hover:brightness-110 transition-all"
                 >
                   Go to Dashboard
-                  <ArrowRight size={14} />
+                  <ArrowRight size={15} />
                 </Link>
+                <button
+                  onClick={logout}
+                  title="Sign out"
+                  className="rounded-full p-2 text-zinc-500 hover:text-red-600 cursor-pointer"
+                >
+                  <LogOut size={15} />
+                </button>
               </>
             ) : (
               <>
                 <Link
                   href="/login"
-                  className="px-4 py-2 text-sm font-medium text-zinc-300 hover:text-white transition-colors cursor-pointer"
+                  className="rounded-full px-3.5 py-2 text-xs sm:text-sm font-semibold text-zinc-700 hover:text-[#111318] transition-colors"
                 >
                   Sign In
                 </Link>
                 <Link
-                  href={isHydrated && isAuthenticated ? '/dashboard' : '/login'}
-                  className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-red-600 via-orange-600 to-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-orange-950/40 hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer"
+                  href="/register"
+                  className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-[#ff3b30] to-[#f97316] px-4 py-2 text-xs sm:text-sm font-semibold text-white shadow-md shadow-orange-500/20 hover:brightness-110 transition-all"
                 >
                   Launch Workspace
-                  <ArrowRight size={14} />
+                  <ArrowRight size={15} />
                 </Link>
               </>
             )}
@@ -102,172 +143,117 @@ export default function MarketingLandingPage() {
         </div>
       </header>
 
-      {/* Hero Section */}
-      <section className="relative pt-20 pb-24 md:pt-32 md:pb-36 overflow-hidden">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
-          {/* Release Badge */}
-          <FadeIn delay={0.05} className="inline-flex items-center justify-center">
-            <div className="inline-flex items-center gap-2 rounded-full border border-orange-500/30 bg-orange-500/10 px-3.5 py-1 text-xs font-mono font-medium text-orange-300 backdrop-blur-md">
-              <span className="h-1.5 w-1.5 rounded-full bg-orange-400 animate-pulse" />
-              Nexora Field OS v2.4 Live · PostgreSQL Sharding Engine
+      {/* 3D Interactive Hero Section */}
+      <section className="relative pt-10 sm:pt-16 pb-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+            className="lg:col-span-6 space-y-6"
+          >
+            <div className="inline-flex items-center gap-2 rounded-full bg-orange-500/10 px-3.5 py-1.5 text-xs font-bold text-orange-600">
+              <Sparkles className="w-3.5 h-3.5" />
+              Multi-Tenant Shard-Routed Field Operations OS
             </div>
-          </FadeIn>
 
-          {/* Heading */}
-          <FadeIn delay={0.1}>
-            <h1 className="mt-6 font-display text-4xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-white max-w-4xl mx-auto leading-[1.08]">
-              The Operations Platform for <span className="bg-gradient-to-r from-red-400 via-orange-400 to-amber-300 bg-clip-text text-transparent">Distributed Field Teams</span>
+            <h1 className="font-display text-4xl sm:text-5xl lg:text-[54px] font-bold tracking-tight leading-[1.08] text-[#111318]">
+              Execute <br />
+              <RotatingWords /> <br />
+              with Zero Blind Spots.
             </h1>
-          </FadeIn>
 
-          <FadeIn delay={0.15}>
-            <p className="mt-6 text-base sm:text-xl text-zinc-400 max-w-2xl mx-auto leading-relaxed">
-              Shard-routed tenant isolation, stage-scoped cross-organization collaboration, and real-time AI governance for mission-critical infrastructure projects.
+            <p className="text-sm sm:text-base text-zinc-600 max-w-xl leading-relaxed">
+              Nexora unifies project-scoped Kanban workflows, typed checklists, 50 GB MinIO media vaults, mixed-language voice-to-text AI governance, and project finance in one mobile-first PWA.
             </p>
-          </FadeIn>
 
-          {/* CTA Buttons */}
-          <FadeIn delay={0.2} className="mt-8 flex flex-wrap items-center justify-center gap-4">
+            <div className="flex flex-wrap items-center gap-3 pt-1">
+              <Link
+                href={isHydrated && isAuthenticated ? '/dashboard' : '/register'}
+                className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-[#ff3b30] to-[#f97316] px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-orange-500/25 hover:brightness-110 active:scale-[0.98] transition-all"
+              >
+                {isHydrated && isAuthenticated ? 'Open Workspace' : 'Start Free Organization'}
+                <ArrowRight size={16} />
+              </Link>
+              <a
+                href="#journey"
+                className="inline-flex items-center gap-2 rounded-full glass-card px-5 py-3.5 text-sm font-semibold text-[#111318] hover:border-orange-500/40 transition-all"
+              >
+                Explore Project Journey
+              </a>
+            </div>
+
+            {/* Counting KPI Strip */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4">
+              <CountUpMetric target={50} suffix=" GB" label="MinIO Vault" sublabel="Per org quota" />
+              <CountUpMetric target={3} suffix="x" label="Postgres Shards" sublabel="S1 / S2 / S3 isolated" />
+              <CountUpMetric target={14} suffix="+" label="Voice Languages" sublabel="Gemini 2.5 AI" />
+              <CountUpMetric target={120} prefix="<" suffix="ms" label="Gateway API" sublabel="Shard routed" />
+            </div>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
+            className="lg:col-span-6"
+          >
+            <HeroScene3D />
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Scroll-Scrubbed Project Journey */}
+      <ProjectJourneyScroll />
+
+      {/* Feature Bento Grid */}
+      <FeatureBento />
+
+      {/* Why Us Comparison */}
+      <WhyUsComparison />
+
+      {/* Interactive FAQ Accordion */}
+      <FaqSection />
+
+      {/* Final Conversion Pitch Card */}
+      <section className="py-16 px-4 sm:px-6 lg:px-8 max-w-6xl mx-auto">
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: false, amount: 0.25 }}
+          transition={{ duration: 0.5 }}
+          className="glass-card rounded-[36px] p-8 sm:p-12 text-center space-y-5"
+        >
+          <div className="inline-flex items-center gap-2 rounded-full bg-emerald-500/10 px-3.5 py-1 text-xs font-bold text-emerald-700">
+            <ShieldCheck className="w-4 h-4" />
+            Ready for Field Deployment
+          </div>
+          <h2 className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-[#111318]">
+            Turn Field Execution into Verifiable Proof
+          </h2>
+          <p className="text-sm sm:text-base text-zinc-600 max-w-2xl mx-auto">
+            Launch your isolated organization shard in under 60 seconds with custom Kanban statuses, MinIO evidence storage, voice-to-text, and financial tracking.
+          </p>
+          <div className="flex flex-wrap justify-center gap-3 pt-2">
             <Link
               href={isHydrated && isAuthenticated ? '/dashboard' : '/register'}
-              className="flex items-center gap-2.5 rounded-xl bg-gradient-to-r from-red-600 via-orange-600 to-orange-500 px-6 py-3.5 text-base font-semibold text-white shadow-xl shadow-orange-950/50 hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer"
+              className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-[#ff3b30] to-[#f97316] px-7 py-3.5 text-sm font-semibold text-white shadow-lg shadow-orange-500/25 hover:brightness-110 transition-all"
             >
-              {isHydrated && isAuthenticated ? 'Open Operations Dashboard' : 'Start Free Workspace'}
+              {isHydrated && isAuthenticated ? 'Go to Dashboard' : 'Create Your Workspace'}
               <ArrowRight size={16} />
             </Link>
             <Link
-              href="/admin"
-              className="flex items-center gap-2 rounded-xl border border-white/[0.08] bg-[#121215] px-6 py-3.5 text-base font-medium text-zinc-300 hover:border-orange-500/40 hover:text-white transition-all cursor-pointer"
+              href="/login"
+              className="inline-flex items-center gap-2 rounded-full glass-subtle px-6 py-3.5 text-sm font-semibold text-[#111318] hover:bg-white transition-all"
             >
-              <ShieldCheck size={16} className="text-orange-400" />
-              Platform Admin Portal
+              Sign In to Existing Org
             </Link>
-          </FadeIn>
-
-          {/* Live Field Task Telemetry Simulator */}
-          <FadeIn delay={0.28} className="mt-16 sm:mt-20">
-            <div className="relative mx-auto max-w-4xl rounded-2xl border border-white/[0.08] bg-[#121215]/90 p-4 sm:p-7 shadow-2xl backdrop-blur-2xl">
-              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/[0.06] pb-4 mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="h-3 w-3 rounded-full bg-red-500/80" />
-                  <div className="h-3 w-3 rounded-full bg-amber-500/80" />
-                  <div className="h-3 w-3 rounded-full bg-emerald-500/80" />
-                  <span className="ml-2 font-mono text-xs text-zinc-400">Live Field Lifecycle Simulator</span>
-                </div>
-                <div className="flex items-center gap-2 font-mono text-xs text-orange-400 bg-orange-500/10 border border-orange-500/20 px-2.5 py-1 rounded-lg">
-                  <Zap size={12} /> Stage: Foundation Survey · Shard S2
-                </div>
-              </div>
-
-              {/* Step Navigation Pill */}
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-6">
-                {taskSteps.map((step, idx) => (
-                  <button
-                    key={step.label}
-                    onClick={() => setActiveTaskStep(idx)}
-                    className={`rounded-xl p-3 text-left transition-all border cursor-pointer ${
-                      activeTaskStep === idx
-                        ? 'border-orange-500/50 bg-gradient-to-b from-orange-500/15 to-transparent text-white shadow-lg'
-                        : 'border-white/[0.04] bg-[#18181b]/50 text-zinc-400 hover:text-zinc-200'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono text-[10px] text-zinc-500">{step.time}</span>
-                      {activeTaskStep >= idx && <CheckCircle2 size={12} className="text-orange-400" />}
-                    </div>
-                    <p className="font-display font-semibold text-xs mt-1">{step.label}</p>
-                    <p className="font-mono text-[10px] mt-0.5 text-orange-300/80">{step.status}</p>
-                  </button>
-                ))}
-              </div>
-
-              {/* Active Step Panel */}
-              <div className="rounded-xl border border-white/[0.06] bg-[#0c0c0e] p-5 text-left flex flex-wrap items-center justify-between gap-4">
-                <div>
-                  <span className="text-xs font-mono text-zinc-500 uppercase tracking-wider">Current Execution State</span>
-                  <h4 className="font-display text-lg font-bold text-white mt-1">
-                    {taskSteps[activeTaskStep].desc}
-                  </h4>
-                  <p className="text-xs text-zinc-400 font-mono mt-1">
-                    Event emitted to RabbitMQ: <span className="text-orange-400">task.status.updated</span> → Worker dispatched
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 px-3 py-1 text-xs font-mono font-medium">
-                    <Sparkles size={12} /> AI Verified (98.4%)
-                  </span>
-                </div>
-              </div>
-            </div>
-          </FadeIn>
-        </div>
+          </div>
+        </motion.div>
       </section>
 
-      {/* Bento Grid Architecture Showcase */}
-      <section id="features" className="py-20 border-t border-white/[0.06] relative">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-3xl mx-auto mb-16">
-            <span className="text-xs font-mono font-semibold text-orange-400 uppercase tracking-widest">Enterprise Architecture</span>
-            <h2 className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-white mt-2">
-              Engineered for Massive Field Operations
-            </h2>
-            <p className="text-zinc-400 text-base mt-3">
-              Built on PostgreSQL logical replication, MongoDB time-series telemetry, and sub-millisecond shard routing.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            {/* Bento Card 1 */}
-            <div className="rounded-2xl border border-white/[0.06] bg-[#121215]/90 p-7 shadow-xl hover:border-orange-500/30 transition-all">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-500/10 border border-orange-500/20 mb-5">
-                <Database size={22} className="text-orange-400" />
-              </div>
-              <h3 className="font-display text-xl font-bold text-white">Shard-Routed Isolation</h3>
-              <p className="text-sm text-zinc-400 mt-2 leading-relaxed">
-                Organizations are partitioned across independent PostgreSQL physical shards (`S1`, `S2`, `S3`) with continuous logical replication to a read-only disaster backup node.
-              </p>
-            </div>
-
-            {/* Bento Card 2 */}
-            <div className="rounded-2xl border border-white/[0.06] bg-[#121215]/90 p-7 shadow-xl hover:border-orange-500/30 transition-all">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-rose-500/10 border border-rose-500/20 mb-5">
-                <Users size={22} className="text-rose-400" />
-              </div>
-              <h3 className="font-display text-xl font-bold text-white">Stage-Scoped Collaboration</h3>
-              <p className="text-sm text-zinc-400 mt-2 leading-relaxed">
-                Invite partner contractors into specific milestone stages without exposing other project stages, tenant credentials, or unrelated organization data.
-              </p>
-            </div>
-
-            {/* Bento Card 3 */}
-            <div className="rounded-2xl border border-white/[0.06] bg-[#121215]/90 p-7 shadow-xl hover:border-orange-500/30 transition-all">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500/10 border border-amber-500/20 mb-5">
-                <Smartphone size={22} className="text-amber-400" />
-              </div>
-              <h3 className="font-display text-xl font-bold text-white">Installable Field PWA</h3>
-              <p className="text-sm text-zinc-400 mt-2 leading-relaxed">
-                Zero app store delays. Technicians install directly to Android & iOS home screens with full offline task caching, photo proof capture, and immediate background sync.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* CTA Footer */}
-      <footer className="border-t border-white/[0.06] bg-[#0c0c0e] py-14">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 flex flex-wrap items-center justify-between gap-6">
-          <div className="flex items-center gap-3">
-            <NexoraMark className="h-6 w-6 text-orange-400" />
-            <span className="font-display text-sm font-semibold text-white">Nexora Field OS</span>
-            <span className="text-xs text-zinc-500">© 2026 Nexora Platform. All rights reserved.</span>
-          </div>
-
-          <div className="flex items-center gap-6 text-xs text-zinc-400">
-            <Link href="/admin" className="hover:text-orange-400 transition-colors">Admin Gateway</Link>
-            <Link href="/login" className="hover:text-orange-400 transition-colors">Tenant Login</Link>
-            <Link href="/register" className="hover:text-orange-400 transition-colors">Create Org</Link>
-          </div>
-        </div>
+      <footer className="border-t border-zinc-200/70 py-8 px-4 text-center text-xs text-zinc-500">
+        Nexora Field OS · Multi-Tenant Shard-Routed Operations Platform
       </footer>
     </div>
   );
