@@ -51,6 +51,25 @@ CREATE TABLE IF NOT EXISTS project_collaborators (
 CREATE INDEX IF NOT EXISTS idx_collab_user ON project_collaborators(user_id);
 CREATE INDEX IF NOT EXISTS idx_collab_project ON project_collaborators(project_id);
 
+CREATE TABLE IF NOT EXISTS project_org_collaborations (
+  collab_id VARCHAR(32) PRIMARY KEY,
+  project_id VARCHAR(32) NOT NULL,
+  project_title VARCHAR(255),
+  owner_org_id VARCHAR(16) NOT NULL REFERENCES org_directory(org_id) ON DELETE CASCADE,
+  owner_shard_id SMALLINT NOT NULL CHECK (owner_shard_id IN (1, 2, 3)),
+  partner_org_id VARCHAR(16) NOT NULL REFERENCES org_directory(org_id) ON DELETE CASCADE,
+  status VARCHAR(24) NOT NULL DEFAULT 'PENDING',
+  invited_by VARCHAR(32) NOT NULL,
+  accepted_by VARCHAR(32),
+  allocated_stage_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  responded_at TIMESTAMPTZ,
+  UNIQUE (project_id, partner_org_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_org_collab_partner ON project_org_collaborations(partner_org_id, status);
+
 CREATE TABLE IF NOT EXISTS refresh_tokens (
   token_id VARCHAR(64) PRIMARY KEY,
   user_id VARCHAR(32) NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,

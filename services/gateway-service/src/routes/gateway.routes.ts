@@ -26,6 +26,14 @@ router.post('/projects/:projectId/stages', authMiddleware, asyncHandler(GatewayC
 router.patch('/projects/:projectId/stages/:stageId', authMiddleware, asyncHandler(GatewayController.updateStage));
 router.delete('/projects/:projectId/stages/:stageId', authMiddleware, asyncHandler(GatewayController.deleteStage));
 router.post('/projects/:projectId/collaborators', authMiddleware, asyncHandler(GatewayController.invitePartner));
+router.get('/orgs/directory', authMiddleware, asyncHandler(GatewayController.listOrgDirectory));
+router.post('/projects/:projectId/org-invites', authMiddleware, asyncHandler(GatewayController.inviteOrgCollaboration));
+router.get('/projects/:projectId/collaborations', authMiddleware, asyncHandler(GatewayController.listProjectCollaborations));
+router.post('/projects/:projectId/collaborators/assign', authMiddleware, asyncHandler(GatewayController.assignPartnerMembers));
+router.delete('/projects/:projectId/collaborators/:userId', authMiddleware, asyncHandler(GatewayController.removePartnerMember));
+router.get('/projects/:projectId/assignees', authMiddleware, asyncHandler(GatewayController.listProjectAssignees));
+router.get('/collaborations/incoming', authMiddleware, asyncHandler(GatewayController.listIncomingOrgCollaborations));
+router.post('/collaborations/:collabId/respond', authMiddleware, asyncHandler(GatewayController.respondToOrgCollaboration));
 
 router.get('/tasks', authMiddleware, asyncHandler(GatewayController.listTasks));
 router.get('/tasks/my-assigned', authMiddleware, asyncHandler(GatewayController.listMyTasks));

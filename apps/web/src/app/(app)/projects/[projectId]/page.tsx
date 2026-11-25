@@ -59,8 +59,13 @@ export default function ProjectDetailView() {
   const [applyingBlueprint, setApplyingBlueprint] = useState(false);
 
   const [partnerOrgId, setPartnerOrgId] = useState('');
-  const [partnerUserId, setPartnerUserId] = useState('');
-  const [partnerRoleName, setPartnerRoleName] = useState('Transit Partner');
+  const [collabNotes, setCollabNotes] = useState('');
+  const [orgDirectory, setOrgDirectory] = useState<Array<{ orgId: string; orgName: string; shardId: number }>>([]);
+  const [orgCollaborations, setOrgCollaborations] = useState<any[]>([]);
+  const [memberCollaborators, setMemberCollaborators] = useState<any[]>([]);
+  const [orgMembers, setOrgMembers] = useState<Array<{ userId: string; fullName: string | null; email: string | null }>>([]);
+  const [assignMemberId, setAssignMemberId] = useState('');
+  const [assignRoleName, setAssignRoleName] = useState('Partner Specialist');
   const [showCollabForm, setShowCollabForm] = useState(false);
 
   const [dragTaskId, setDragTaskId] = useState<string | null>(null);
@@ -80,14 +85,24 @@ export default function ProjectDetailView() {
     if (!token || !activeOrg || !projectId) return;
     setLoading(true);
     try {
-      const res = await apiRequest<{ project: any; stages: any[] }>(
-        `/api/v1/projects/${projectId}`,
-        {},
-        token
-      );
+      const [res, dirRes, colRes, memRes] = await Promise.all([
+        apiRequest<{ project: any; stages: any[] }>(`/api/v1/projects/${projectId}`, {}, token),
+        apiRequest<{ orgs: any[] }>('/api/v1/orgs/directory', {}, token).catch(() => ({ orgs: [] })),
+        apiRequest<{ orgCollaborations: any[]; memberCollaborators: any[] }>(
+          `/api/v1/projects/${projectId}/collaborations`,
+          {},
+          token
+        ).catch(() => ({ orgCollaborations: [], memberCollaborators: [] })),
+        apiRequest<{ members: any[] }>('/api/v1/org/members', {}, token).catch(() => ({ members: [] })),
+      ]);
       setProject(res.project);
       setStages(res.stages || []);
       setBlueprintBrief(res.project?.leadBrief || '');
+      setOrgDirectory(dirRes.orgs || []);
+      setOrgCollaborations(colRes.orgCollaborations || []);
+      setMemberCollaborators(colRes.memberCollaborators || []);
+      setOrgMembers(memRes.members || []);
+      if (dirRes.orgs?.[0] && !partnerOrgId) setPartnerOrgId(dirRes.orgs[0].orgId);
       if (res.stages?.[0] && !selectedStageId) setSelectedStageId(res.stages[0].stageId);
     } catch (e) {
       console.error('Project detail load error:', e);
@@ -207,28 +222,55 @@ export default function ProjectDetailView() {
 
   async function handleInvitePartner(e: React.FormEvent) {
     e.preventDefault();
-    if (!token || !partnerOrgId.trim() || !partnerUserId.trim()) return;
+    if (!token || !partnerOrgId.trim()) return;
     try {
       await apiRequest(
-        `/api/v1/projects/${projectId}/collaborators`,
+        `/api/v1/projects/${projectId}/org-invites`,
         {
           method: 'POST',
           body: JSON.stringify({
             partnerOrgId: partnerOrgId.trim().toUpperCase(),
-            userId: partnerUserId.trim(),
-            roleName: partnerRoleName,
+            allocatedStageIds: stages.map((s) => s.stageId),
+            notes: collabNotes.trim() || undefined,
+          }),
+        },
+        token
+      );
+      setCollabNotes('');
+      await load();
+    } catch (err) {
+      alert((err as Error).message);
+    }
+  }
+
+  async function handleAssignMemberToProject(e: React.FormEvent) {
+    e.preventDefault();
+    if (!token || !assignMemberId) return;
+    try {
+      await apiRequest(
+        `/api/v1/projects/${projectId}/collaborators/assign`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            partnerOrgId: activeOrg?.org_id,
+            userIds: [assignMemberId],
+            roleName: assignRoleName,
             allocatedStageIds: stages.map((s) => s.stageId),
           }),
         },
         token
       );
-      setPartnerOrgId('');
-      setPartnerUserId('');
-      setShowCollabForm(false);
+      setAssignMemberId('');
       await load();
     } catch (err) {
       alert((err as Error).message);
     }
+  }
+
+  async function handleRemoveCollaborator(userId: string) {
+    if (!token) return;
+    await apiRequest(`/api/v1/projects/${projectId}/collaborators/${userId}`, { method: 'DELETE' }, token);
+    await load();
   }
 
   async function triggerAiAnalysis() {
@@ -356,25 +398,153 @@ export default function ProjectDetailView() {
         </form>
       )}
 
-      {/* Partner Invite Form */}
+      {/* Cross-Organization Collaboration Panel */}
       {showCollabForm && (
-        <form onSubmit={handleInvitePartner} className="rounded-[22px] border border-orange-500/30 bg-[#151314] p-5 flex flex-wrap items-end gap-3">
-          <div className="flex-1 min-w-[160px]">
-            <label className="block text-[11px] font-mono text-zinc-400 mb-1">Partner Org ID</label>
-            <input type="text" required value={partnerOrgId} onChange={(e) => setPartnerOrgId(e.target.value)} placeholder="PTR-26-XXXXX" className="w-full rounded-xl border border-white/[0.08] bg-[#121215] px-3 py-2 text-xs text-white font-mono outline-none focus:border-orange-500" />
+        <div className="rounded-[22px] border border-orange-500/30 bg-[#151314] p-5 space-y-5">
+          <form onSubmit={handleInvitePartner} className="flex flex-wrap items-end gap-3">
+            <div className="flex-1 min-w-[200px]">
+              <label className="block text-[11px] font-semibold text-zinc-400 mb-1">
+                Invite Partner Organization
+              </label>
+              {orgDirectory.length > 0 ? (
+                <select
+                  value={partnerOrgId}
+                  onChange={(e) => setPartnerOrgId(e.target.value)}
+                  className="w-full rounded-xl border border-white/[0.08] bg-[#121215] px-3 py-2 text-xs text-white outline-none focus:border-orange-500"
+                >
+                  {orgDirectory.map((o) => (
+                    <option key={o.orgId} value={o.orgId}>
+                      {o.orgName} ({o.orgId})
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  required
+                  value={partnerOrgId}
+                  onChange={(e) => setPartnerOrgId(e.target.value)}
+                  placeholder="Partner Org ID (e.g. PTR-26-XXXXX)"
+                  className="w-full rounded-xl border border-white/[0.08] bg-[#121215] px-3 py-2 text-xs text-white outline-none focus:border-orange-500"
+                />
+              )}
+            </div>
+            <div className="flex-1 min-w-[200px]">
+              <label className="block text-[11px] font-semibold text-zinc-400 mb-1">
+                Collaboration Scope / Note
+              </label>
+              <input
+                type="text"
+                value={collabNotes}
+                onChange={(e) => setCollabNotes(e.target.value)}
+                placeholder="e.g. Handle solar inverter commissioning"
+                className="w-full rounded-xl border border-white/[0.08] bg-[#121215] px-3 py-2 text-xs text-white outline-none focus:border-orange-500"
+              />
+            </div>
+            <button
+              type="submit"
+              className="rounded-xl bg-gradient-to-r from-[#ff3b30] to-[#f97316] px-4 py-2 text-xs font-semibold text-white cursor-pointer"
+            >
+              Send Org Invite
+            </button>
+          </form>
+
+          {/* Assign Team Members from Current Org (for Accepted Partner Orgs or Owner) */}
+          <form onSubmit={handleAssignMemberToProject} className="flex flex-wrap items-end gap-3 pt-3 border-t border-white/[0.06]">
+            <div className="flex-1 min-w-[200px]">
+              <label className="block text-[11px] font-semibold text-zinc-400 mb-1">
+                Assign Team Member ({activeOrg?.org_name}) to Project
+              </label>
+              <select
+                value={assignMemberId}
+                onChange={(e) => setAssignMemberId(e.target.value)}
+                className="w-full rounded-xl border border-white/[0.08] bg-[#121215] px-3 py-2 text-xs text-white outline-none"
+              >
+                <option value="">Select member...</option>
+                {orgMembers.map((m) => (
+                  <option key={m.userId} value={m.userId}>
+                    {m.fullName || m.email}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="min-w-[160px]">
+              <label className="block text-[11px] font-semibold text-zinc-400 mb-1">Project Role</label>
+              <input
+                type="text"
+                value={assignRoleName}
+                onChange={(e) => setAssignRoleName(e.target.value)}
+                className="w-full rounded-xl border border-white/[0.08] bg-[#121215] px-3 py-2 text-xs text-white outline-none"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={!assignMemberId}
+              className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50 cursor-pointer"
+            >
+              Assign Member
+            </button>
+          </form>
+
+          {/* Collaborating Organizations & Assigned Members List */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+            <div className="space-y-2">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">
+                Partner Organizations ({orgCollaborations.length})
+              </p>
+              {orgCollaborations.length === 0 ? (
+                <p className="text-xs text-zinc-500">No partner organizations invited yet.</p>
+              ) : (
+                orgCollaborations.map((oc) => (
+                  <div key={oc.collab_id} className="flex items-center justify-between rounded-xl border border-white/[0.06] bg-[#121215] px-3 py-2 text-xs">
+                    <div>
+                      <p className="font-semibold text-white">{oc.partner_org_name}</p>
+                      <p className="text-[10px] text-zinc-400">{oc.partner_org_id}</p>
+                    </div>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                        oc.status === 'ACCEPTED'
+                          ? 'bg-emerald-500/15 text-emerald-400'
+                          : oc.status === 'REJECTED'
+                          ? 'bg-red-500/15 text-red-400'
+                          : 'bg-amber-500/15 text-amber-400'
+                      }`}
+                    >
+                      {oc.status}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">
+                Assigned Collaborating Users ({memberCollaborators.length})
+              </p>
+              {memberCollaborators.length === 0 ? (
+                <p className="text-xs text-zinc-500">No external collaborators assigned yet.</p>
+              ) : (
+                memberCollaborators.map((mc) => (
+                  <div key={mc.user_id} className="flex items-center justify-between rounded-xl border border-white/[0.06] bg-[#121215] px-3 py-2 text-xs">
+                    <div>
+                      <p className="font-semibold text-white">{mc.full_name || mc.email || mc.user_id}</p>
+                      <p className="text-[10px] text-zinc-400">
+                        {mc.partner_org_name || mc.partner_org_id} · {mc.project_role_name}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void handleRemoveCollaborator(mc.user_id)}
+                      className="text-[11px] font-semibold text-red-400 hover:underline cursor-pointer"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
-          <div className="flex-1 min-w-[160px]">
-            <label className="block text-[11px] font-mono text-zinc-400 mb-1">Partner User ID</label>
-            <input type="text" required value={partnerUserId} onChange={(e) => setPartnerUserId(e.target.value)} placeholder="USR-..." className="w-full rounded-xl border border-white/[0.08] bg-[#121215] px-3 py-2 text-xs text-white font-mono outline-none focus:border-orange-500" />
-          </div>
-          <div className="min-w-[160px]">
-            <label className="block text-[11px] font-mono text-zinc-400 mb-1">Project Role</label>
-            <input type="text" value={partnerRoleName} onChange={(e) => setPartnerRoleName(e.target.value)} className="w-full rounded-xl border border-white/[0.08] bg-[#121215] px-3 py-2 text-xs text-white outline-none focus:border-orange-500" />
-          </div>
-          <button type="submit" className="rounded-xl bg-gradient-to-r from-red-600 to-orange-500 px-4 py-2 text-xs font-semibold text-white cursor-pointer">
-            Grant Access
-          </button>
-        </form>
+        </div>
       )}
 
       {/* 4-Stat Hero Strip */}

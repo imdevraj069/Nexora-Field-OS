@@ -67,6 +67,30 @@ export const ProjectService = {
       project_id: projectId,
     });
     if (!access.allowed) {
+      const orgCollab = await dataRouter.postgres.getGlobalPool().query(
+        `SELECT owner_org_id, owner_shard_id, allocated_stage_ids
+         FROM project_org_collaborations
+         WHERE project_id = $1 AND partner_org_id = $2 AND status = 'ACCEPTED'`,
+        [projectId, userOrgId],
+      );
+      if (orgCollab.rows.length > 0) {
+        const c = orgCollab.rows[0];
+        return {
+          ownerOrgId: String(c.owner_org_id),
+          ownerShardId: Number(c.owner_shard_id) as 1 | 2 | 3,
+          roleCtx: {
+            roleName: 'Partner Organization',
+            flags: {
+              [PERMISSION_FLAGS.STAGE_MANAGE_ALLOCATED_ONLY]: true,
+              [PERMISSION_FLAGS.TASK_EXECUTE_OWN]: true,
+              [PERMISSION_FLAGS.TASK_UPLOAD_EVIDENCE]: true,
+              [PERMISSION_FLAGS.ORG_INVITE_PARTNER_ORGS]: true,
+            },
+            allocatedStageIds: Array.isArray(c.allocated_stage_ids) ? (c.allocated_stage_ids as string[]) : [],
+            isExternalCollaborator: true,
+          },
+        };
+      }
       throw new AppError(403, 'Forbidden: no access to requested project');
     }
     const roleCtx: RolePermissionContext = {
@@ -140,23 +164,29 @@ export const ProjectService = {
     );
     const collabRows = await dataRouter.postgres
       .getGlobalPool()
-      .query(`SELECT project_id, owner_org_id, owner_shard_id FROM project_collaborators WHERE user_id = $1`, [
-        auth.userId,
-      ]);
+      .query(
+        `SELECT project_id, owner_org_id, owner_shard_id FROM project_collaborators WHERE user_id = $1
+         UNION
+         SELECT project_id, owner_org_id, owner_shard_id FROM project_org_collaborations WHERE partner_org_id = $2 AND status = 'ACCEPTED'`,
+        [auth.userId, auth.activeOrgId],
+      );
 
+    const seenIds = new Set(homeProjects.rows.map((r) => r.project_id));
     const sharedProjects = await Promise.all(
-      collabRows.rows.map(async (c) => {
-        const p = dataRouter.postgres.getReadPool(c.owner_shard_id, true);
-        const r = await p.query(
-          `SELECT p.project_id, p.org_id, p.title, p.description, p.status, p.manager_user_id, p.lead_brief, p.workflow_statuses, p.start_date, p.target_end_date, p.created_at,
-                  (SELECT COUNT(*)::int FROM stages s WHERE s.project_id = p.project_id) AS stages_count,
-                  (SELECT COUNT(*)::int FROM tasks t WHERE t.project_id = p.project_id) AS tasks_count,
-                  (SELECT COUNT(*)::int FROM tasks t WHERE t.project_id = p.project_id AND t.status IN ('DONE', 'COMPLETED', 'VERIFIED', 'SUBMITTED')) AS completed_tasks_count
-           FROM projects p WHERE p.project_id = $1`,
-          [c.project_id],
-        );
-        return r.rows[0];
-      }),
+      collabRows.rows
+        .filter((c) => !seenIds.has(c.project_id))
+        .map(async (c) => {
+          const p = dataRouter.postgres.getReadPool(c.owner_shard_id, true);
+          const r = await p.query(
+            `SELECT p.project_id, p.org_id, p.title, p.description, p.status, p.manager_user_id, p.lead_brief, p.workflow_statuses, p.start_date, p.target_end_date, p.created_at,
+                    (SELECT COUNT(*)::int FROM stages s WHERE s.project_id = p.project_id) AS stages_count,
+                    (SELECT COUNT(*)::int FROM tasks t WHERE t.project_id = p.project_id) AS tasks_count,
+                    (SELECT COUNT(*)::int FROM tasks t WHERE t.project_id = p.project_id AND t.status IN ('DONE', 'COMPLETED', 'VERIFIED', 'SUBMITTED')) AS completed_tasks_count
+             FROM projects p WHERE p.project_id = $1`,
+            [c.project_id],
+          );
+          return r.rows[0];
+        }),
     );
 
     return [...homeProjects.rows, ...sharedProjects.filter(Boolean)].map((p) => ({
@@ -882,6 +912,307 @@ export const ProjectService = {
       ],
     );
     return true;
+  },
+
+  async listOrgDirectory(auth: AuthContext, query?: string) {
+    const q = (query || '').trim();
+    const res = await dataRouter.postgres.getGlobalPool().query(
+      `SELECT org_id, org_name, shard_id
+       FROM org_directory
+       WHERE org_id <> $1 AND ($2 = '' OR org_name ILIKE $3 OR org_id ILIKE $3)
+       ORDER BY org_name ASC
+       LIMIT 30`,
+      [auth.activeOrgId, q, `%${q}%`],
+    );
+    return res.rows.map((r) => ({
+      orgId: String(r.org_id),
+      orgName: String(r.org_name),
+      shardId: Number(r.shard_id),
+    }));
+  },
+
+  async inviteOrgCollaboration(
+    auth: AuthContext,
+    args: { projectId: string; partnerOrgId: string; allocatedStageIds?: string[]; notes?: string },
+  ) {
+    const { ownerOrgId, ownerShardId, roleCtx } = await this.resolveAccess(
+      auth.userId,
+      auth.activeOrgId,
+      args.projectId,
+    );
+    if (!hasPermission(roleCtx, PERMISSION_FLAGS.ORG_INVITE_PARTNER_ORGS)) {
+      throw new AppError(403, 'Forbidden: requires org.invite_partner_orgs');
+    }
+    const partnerOrgId = args.partnerOrgId.trim().toUpperCase();
+    if (!partnerOrgId || partnerOrgId === ownerOrgId) {
+      throw new AppError(400, 'Select a valid partner organization distinct from the project owner');
+    }
+
+    const globalPool = dataRouter.postgres.getGlobalPool();
+    const orgCheck = await globalPool.query(`SELECT org_id, org_name FROM org_directory WHERE org_id = $1`, [partnerOrgId]);
+    if (orgCheck.rows.length === 0) {
+      throw new AppError(404, `Partner organization ${partnerOrgId} not found`);
+    }
+
+    const projRes = await dataRouter.postgres
+      .getReadPool(ownerShardId, true)
+      .query(`SELECT title FROM projects WHERE project_id = $1`, [args.projectId]);
+    const projectTitle = projRes.rows[0]?.title ?? args.projectId;
+    const collabId = `CLB-${crypto.randomUUID().replace(/-/g, '').slice(0, 12).toUpperCase()}`;
+
+    const res = await globalPool.query(
+      `INSERT INTO project_org_collaborations
+         (collab_id, project_id, project_title, owner_org_id, owner_shard_id, partner_org_id, status, invited_by, allocated_stage_ids, notes)
+       VALUES ($1, $2, $3, $4, $5, $6, 'PENDING', $7, $8::jsonb, $9)
+       ON CONFLICT (project_id, partner_org_id) DO UPDATE SET
+         status = CASE WHEN project_org_collaborations.status = 'REJECTED' THEN 'PENDING' ELSE project_org_collaborations.status END,
+         allocated_stage_ids = EXCLUDED.allocated_stage_ids,
+         notes = COALESCE(EXCLUDED.notes, project_org_collaborations.notes),
+         invited_by = EXCLUDED.invited_by
+       RETURNING *`,
+      [
+        collabId,
+        args.projectId,
+        projectTitle,
+        ownerOrgId,
+        ownerShardId,
+        partnerOrgId,
+        auth.userId,
+        JSON.stringify(args.allocatedStageIds ?? []),
+        args.notes ?? null,
+      ],
+    );
+    return res.rows[0];
+  },
+
+  async listProjectCollaborations(auth: AuthContext, projectId: string) {
+    await this.resolveAccess(auth.userId, auth.activeOrgId, projectId);
+    const globalPool = dataRouter.postgres.getGlobalPool();
+    const [orgRes, memRes] = await Promise.all([
+      globalPool.query(
+        `SELECT c.*, d.org_name AS partner_org_name
+         FROM project_org_collaborations c
+         JOIN org_directory d ON d.org_id = c.partner_org_id
+         WHERE c.project_id = $1
+         ORDER BY c.created_at DESC`,
+        [projectId],
+      ),
+      globalPool.query(
+        `SELECT c.partner_org_id, d.org_name AS partner_org_name, c.user_id, c.project_role_name, c.allocated_stage_ids, u.full_name, u.email
+         FROM project_collaborators c
+         LEFT JOIN users u ON u.user_id = c.user_id
+         LEFT JOIN org_directory d ON d.org_id = c.partner_org_id
+         WHERE c.project_id = $1
+         ORDER BY c.invited_at DESC`,
+        [projectId],
+      ),
+    ]);
+    return {
+      orgCollaborations: orgRes.rows,
+      memberCollaborators: memRes.rows,
+    };
+  },
+
+  async listIncomingOrgCollaborations(auth: AuthContext) {
+    const res = await dataRouter.postgres.getGlobalPool().query(
+      `SELECT c.*, d.org_name AS owner_org_name
+       FROM project_org_collaborations c
+       JOIN org_directory d ON d.org_id = c.owner_org_id
+       WHERE c.partner_org_id = $1
+       ORDER BY c.created_at DESC`,
+      [auth.activeOrgId],
+    );
+    return res.rows;
+  },
+
+  async respondToOrgCollaboration(
+    auth: AuthContext,
+    collabId: string,
+    body: { status: 'ACCEPTED' | 'REJECTED'; assignedUserIds?: string[]; roleName?: string },
+  ) {
+    if (!['ACCEPTED', 'REJECTED'].includes(body.status)) {
+      throw new AppError(400, 'status must be ACCEPTED or REJECTED');
+    }
+    const globalPool = dataRouter.postgres.getGlobalPool();
+    const existing = await globalPool.query(`SELECT * FROM project_org_collaborations WHERE collab_id = $1`, [collabId]);
+    if (existing.rows.length === 0) throw new AppError(404, 'Collaboration invitation not found');
+
+    const collab = existing.rows[0];
+    if (collab.partner_org_id !== auth.activeOrgId) {
+      throw new AppError(403, 'Only the invited partner organization can respond to this invitation');
+    }
+
+    const updated = await globalPool.query(
+      `UPDATE project_org_collaborations
+       SET status = $1, accepted_by = $2, responded_at = NOW()
+       WHERE collab_id = $3
+       RETURNING *`,
+      [body.status, auth.userId, collabId],
+    );
+
+    if (body.status === 'ACCEPTED') {
+      const userIds = Array.from(new Set([...(body.assignedUserIds ?? []), auth.userId])).filter(Boolean);
+      const partnerFlags = {
+        [PERMISSION_FLAGS.STAGE_MANAGE_ALLOCATED_ONLY]: true,
+        [PERMISSION_FLAGS.TASK_EXECUTE_OWN]: true,
+        [PERMISSION_FLAGS.TASK_UPLOAD_EVIDENCE]: true,
+      };
+      for (const uid of userIds) {
+        await globalPool.query(
+          `INSERT INTO project_collaborators
+             (project_id, owner_org_id, owner_shard_id, partner_org_id, user_id, project_role_name, permission_flags, allocated_stage_ids)
+           VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb)
+           ON CONFLICT (project_id, user_id) DO UPDATE SET
+             project_role_name = EXCLUDED.project_role_name,
+             allocated_stage_ids = EXCLUDED.allocated_stage_ids`,
+          [
+            collab.project_id,
+            collab.owner_org_id,
+            collab.owner_shard_id,
+            collab.partner_org_id,
+            uid,
+            body.roleName || 'Partner Specialist',
+            JSON.stringify(partnerFlags),
+            JSON.stringify(collab.allocated_stage_ids ?? []),
+          ],
+        );
+      }
+    }
+
+    return updated.rows[0];
+  },
+
+  async assignPartnerMembers(
+    auth: AuthContext,
+    projectId: string,
+    args: { partnerOrgId?: string; userIds: string[]; roleName?: string; allocatedStageIds?: string[] },
+  ) {
+    const { ownerOrgId, ownerShardId } = await this.resolveAccess(auth.userId, auth.activeOrgId, projectId);
+    const targetPartnerOrgId = (args.partnerOrgId || auth.activeOrgId).trim().toUpperCase();
+    const globalPool = dataRouter.postgres.getGlobalPool();
+
+    if (targetPartnerOrgId !== ownerOrgId) {
+      const accepted = await globalPool.query(
+        `SELECT allocated_stage_ids FROM project_org_collaborations
+         WHERE project_id = $1 AND partner_org_id = $2 AND status = 'ACCEPTED'`,
+        [projectId, targetPartnerOrgId],
+      );
+      if (accepted.rows.length === 0) {
+        throw new AppError(400, `Organization ${targetPartnerOrgId} has not accepted collaboration on this project yet`);
+      }
+    }
+
+    const partnerFlags = {
+      [PERMISSION_FLAGS.STAGE_MANAGE_ALLOCATED_ONLY]: true,
+      [PERMISSION_FLAGS.TASK_EXECUTE_OWN]: true,
+      [PERMISSION_FLAGS.TASK_UPLOAD_EVIDENCE]: true,
+    };
+
+    for (const uid of args.userIds || []) {
+      await globalPool.query(
+        `INSERT INTO project_collaborators
+           (project_id, owner_org_id, owner_shard_id, partner_org_id, user_id, project_role_name, permission_flags, allocated_stage_ids)
+         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb)
+         ON CONFLICT (project_id, user_id) DO UPDATE SET
+           project_role_name = EXCLUDED.project_role_name,
+           allocated_stage_ids = EXCLUDED.allocated_stage_ids`,
+        [
+          projectId,
+          ownerOrgId,
+          ownerShardId,
+          targetPartnerOrgId,
+          uid,
+          args.roleName || 'Partner Specialist',
+          JSON.stringify(partnerFlags),
+          JSON.stringify(args.allocatedStageIds ?? []),
+        ],
+      );
+    }
+    return { assigned: (args.userIds || []).length };
+  },
+
+  async removePartnerMember(auth: AuthContext, projectId: string, userId: string) {
+    await this.resolveAccess(auth.userId, auth.activeOrgId, projectId);
+    await dataRouter.postgres
+      .getGlobalPool()
+      .query(`DELETE FROM project_collaborators WHERE project_id = $1 AND user_id = $2`, [projectId, userId]);
+    return { removed: true, userId };
+  },
+
+  async listProjectAssignees(auth: AuthContext, projectId: string) {
+    const { ownerOrgId, ownerShardId } = await this.resolveAccess(auth.userId, auth.activeOrgId, projectId);
+    const globalPool = dataRouter.postgres.getGlobalPool();
+    const ownerPool = dataRouter.postgres.getReadPool(ownerShardId, true);
+
+    const [ownerMembersRes, ownerOrgRes, collabRes] = await Promise.all([
+      ownerPool.query(
+        `SELECT m.user_id, r.name AS role_name
+         FROM org_members m
+         LEFT JOIN roles r ON r.role_id = m.role_id
+         WHERE m.org_id = $1 AND m.status = 'ACTIVE'`,
+        [ownerOrgId],
+      ),
+      globalPool.query(`SELECT org_name FROM org_directory WHERE org_id = $1`, [ownerOrgId]),
+      globalPool.query(
+        `SELECT c.user_id, c.partner_org_id, d.org_name AS partner_org_name, c.project_role_name, u.full_name, u.email
+         FROM project_collaborators c
+         LEFT JOIN users u ON u.user_id = c.user_id
+         LEFT JOIN org_directory d ON d.org_id = c.partner_org_id
+         WHERE c.project_id = $1`,
+        [projectId],
+      ),
+    ]);
+
+    const ownerUserIds = ownerMembersRes.rows.map((r) => String(r.user_id));
+    const usersRes = ownerUserIds.length
+      ? await globalPool.query(`SELECT user_id, full_name, email FROM users WHERE user_id = ANY($1::text[])`, [ownerUserIds])
+      : { rows: [] };
+    const userMap = new Map(usersRes.rows.map((u) => [String(u.user_id), u]));
+    const ownerOrgName = ownerOrgRes.rows[0]?.org_name ?? ownerOrgId;
+
+    const assignees: Array<{
+      userId: string;
+      fullName: string;
+      email: string;
+      orgId: string;
+      orgName: string;
+      roleName: string;
+      isExternal: boolean;
+    }> = [];
+    const seen = new Set<string>();
+
+    for (const m of ownerMembersRes.rows) {
+      const uid = String(m.user_id);
+      if (seen.has(uid)) continue;
+      seen.add(uid);
+      const u = userMap.get(uid);
+      assignees.push({
+        userId: uid,
+        fullName: u?.full_name || u?.email || uid,
+        email: u?.email || '',
+        orgId: ownerOrgId,
+        orgName: String(ownerOrgName),
+        roleName: String(m.role_name || 'Member'),
+        isExternal: false,
+      });
+    }
+
+    for (const c of collabRes.rows) {
+      const uid = String(c.user_id);
+      if (seen.has(uid)) continue;
+      seen.add(uid);
+      assignees.push({
+        userId: uid,
+        fullName: c.full_name || c.email || uid,
+        email: c.email || '',
+        orgId: String(c.partner_org_id),
+        orgName: String(c.partner_org_name || c.partner_org_id),
+        roleName: String(c.project_role_name || 'Collaborator'),
+        isExternal: true,
+      });
+    }
+
+    return assignees;
   },
 
   async generateAiPlan(auth: AuthContext, prompt: string, industryHint?: string) {

@@ -34,6 +34,9 @@ interface MemberOption {
   userId: string;
   fullName: string | null;
   email: string | null;
+  orgId?: string;
+  orgName?: string;
+  isExternal?: boolean;
 }
 
 interface TaskCreateModalProps {
@@ -56,7 +59,6 @@ export function TaskCreateModal({
   const { activeOrg, token } = useWorkspaceAuth();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [taskType, setTaskType] = useState('ON_FIELD');
   const [stageId, setStageId] = useState(defaultStageId || stages[0]?.stageId || '');
   const [assignedUserId, setAssignedUserId] = useState('');
   const [deadline, setDeadline] = useState('');
@@ -77,15 +79,25 @@ export function TaskCreateModal({
 
   useEffect(() => {
     if (defaultStageId) setStageId(defaultStageId);
-    else if (stages.length > 0 && !stageId) setStageId(stages[0].stageId);
-  }, [defaultStageId, stages, stageId]);
+    else if (stages.length > 0 && !stages.some((s) => s.stageId === stageId)) {
+      setStageId(stages[0].stageId);
+    }
+  }, [defaultStageId, stages, stageId, isOpen]);
 
   useEffect(() => {
-    if (!isOpen || !token) return;
-    apiRequest<{ members: MemberOption[] }>('/api/v1/org/members', {}, token)
-      .then((res) => setMembers(res.members || []))
-      .catch(() => {});
-  }, [isOpen, token]);
+    if (!isOpen || !token || !projectId) return;
+    apiRequest<{ assignees: MemberOption[] }>(
+      `/api/v1/projects/${projectId}/assignees`,
+      { headers: { 'x-org-id': activeOrg?.org_id || '' } },
+      token
+    )
+      .then((res) => setMembers(res.assignees || []))
+      .catch(() => {
+        apiRequest<{ members: MemberOption[] }>('/api/v1/org/members', {}, token)
+          .then((res) => setMembers(res.members || []))
+          .catch(() => {});
+      });
+  }, [isOpen, token, projectId, activeOrg?.org_id]);
 
   if (!isOpen) return null;
 
@@ -129,17 +141,19 @@ export function TaskCreateModal({
     setLoading(true);
     setError('');
 
+    const selectedMilestone = stages.find((s) => s.stageId === stageId);
     try {
       await apiRequest(
         `/api/v1/tasks`,
         {
           method: 'POST',
+          headers: { 'x-org-id': activeOrg.org_id },
           body: JSON.stringify({
             projectId,
             stageId,
             title,
             description,
-            taskType,
+            taskType: selectedMilestone?.name || 'MILESTONE_TASK',
             assignedUserId: assignedUserId || undefined,
             deadline: deadline || undefined,
             checklist: checklistItems,
@@ -148,6 +162,8 @@ export function TaskCreateModal({
         },
         token
       );
+      setTitle('');
+      setDescription('');
       onSuccess();
     } catch (err) {
       setError((err as Error).message || 'Failed to create task.');
@@ -198,37 +214,28 @@ export function TaskCreateModal({
               />
             </div>
 
-            {stages.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="block text-xs font-medium text-zinc-300 mb-1.5">Milestone Stage *</label>
-                <select
-                  value={stageId}
-                  onChange={(e) => setStageId(e.target.value)}
-                  className="w-full rounded-xl border border-white/[0.08] bg-[#18181c] px-3 py-2.5 text-xs text-zinc-100 outline-none focus:border-orange-500/60 cursor-pointer"
-                >
-                  {stages.map((s) => (
-                    <option key={s.stageId} value={s.stageId}>{s.name}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-zinc-300 mb-1.5">Category</label>
-                <select
-                  value={taskType}
-                  onChange={(e) => setTaskType(e.target.value)}
-                  className="w-full rounded-xl border border-white/[0.08] bg-[#18181c] px-3 py-2 text-xs text-zinc-100 outline-none"
-                >
-                  <option value="ON_FIELD">On-Field</option>
-                  <option value="TRANSIT">Transit</option>
-                  <option value="INSPECTION">Inspection</option>
-                  <option value="HANDOVER">Handover</option>
-                </select>
+                <label className="block text-xs font-medium text-zinc-300 mb-1.5">Milestone *</label>
+                {stages.length === 0 ? (
+                  <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-400">
+                    Create a milestone under this project first.
+                  </p>
+                ) : (
+                  <select
+                    value={stageId}
+                    onChange={(e) => setStageId(e.target.value)}
+                    required
+                    className="w-full rounded-xl border border-white/[0.08] bg-[#18181c] px-3 py-2 text-xs text-zinc-100 outline-none focus:border-orange-500/60 cursor-pointer"
+                  >
+                    {stages.map((s) => (
+                      <option key={s.stageId} value={s.stageId}>{s.name}</option>
+                    ))}
+                  </select>
+                )}
               </div>
               <div>
-                <label className="block text-xs font-medium text-zinc-300 mb-1.5">Assignee</label>
+                <label className="block text-xs font-medium text-zinc-300 mb-1.5">Assignee (All Project Orgs)</label>
                 <select
                   value={assignedUserId}
                   onChange={(e) => setAssignedUserId(e.target.value)}
@@ -236,7 +243,9 @@ export function TaskCreateModal({
                 >
                   <option value="">Unassigned</option>
                   {members.map((m) => (
-                    <option key={m.userId} value={m.userId}>{m.fullName || m.email}</option>
+                    <option key={m.userId} value={m.userId}>
+                      {m.fullName || m.email}{m.orgName ? ` (${m.orgName})` : ''}
+                    </option>
                   ))}
                 </select>
               </div>

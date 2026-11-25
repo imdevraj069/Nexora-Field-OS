@@ -267,4 +267,56 @@ export const GatewayController = {
     );
     res.json(result);
   },
+  listOrgDirectory: async (req: AuthedRequest, res: Response) => {
+    const orgs = await ProjectService.listOrgDirectory(
+      req.auth!,
+      req.query.q ? String(req.query.q) : undefined,
+    );
+    res.json({ orgs });
+  },
+  inviteOrgCollaboration: async (req: AuthedRequest, res: Response) => {
+    const collab = await ProjectService.inviteOrgCollaboration(req.auth!, {
+      projectId: String(req.params.projectId),
+      partnerOrgId: req.body.partnerOrgId,
+      allocatedStageIds: req.body.allocatedStageIds,
+      notes: req.body.notes,
+    });
+    res.status(201).json({ collaboration: collab });
+  },
+  listProjectCollaborations: async (req: AuthedRequest, res: Response) => {
+    const data = await ProjectService.listProjectCollaborations(req.auth!, String(req.params.projectId));
+    res.json(data);
+  },
+  listIncomingOrgCollaborations: async (req: AuthedRequest, res: Response) => {
+    const incoming = await ProjectService.listIncomingOrgCollaborations(req.auth!);
+    res.json({ incoming });
+  },
+  respondToOrgCollaboration: async (req: AuthedRequest, res: Response) => {
+    const collaboration = await ProjectService.respondToOrgCollaboration(
+      req.auth!,
+      String(req.params.collabId),
+      req.body,
+    );
+    res.json({ collaboration });
+  },
+  assignPartnerMembers: async (req: AuthedRequest, res: Response) => {
+    const result = await ProjectService.assignPartnerMembers(
+      req.auth!,
+      String(req.params.projectId),
+      req.body,
+    );
+    res.status(201).json(result);
+  },
+  removePartnerMember: async (req: AuthedRequest, res: Response) => {
+    const result = await ProjectService.removePartnerMember(
+      req.auth!,
+      String(req.params.projectId),
+      String(req.params.userId),
+    );
+    res.json(result);
+  },
+  listProjectAssignees: async (req: AuthedRequest, res: Response) => {
+    const assignees = await ProjectService.listProjectAssignees(req.auth!, String(req.params.projectId));
+    res.json({ assignees });
+  },
 };
