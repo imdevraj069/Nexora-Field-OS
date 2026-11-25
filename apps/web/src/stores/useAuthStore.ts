@@ -17,15 +17,34 @@ export interface ActiveOrg {
   shard_id: number;
 }
 
+export interface WorkflowStatusDef {
+  key: string;
+  label: string;
+  color: string;
+  category: 'OPEN' | 'ACTIVE' | 'DONE';
+  order: number;
+}
+
+export const DEFAULT_STATUSES: WorkflowStatusDef[] = [
+  { key: 'TODO', label: 'To Do', color: '#71717a', category: 'OPEN', order: 1 },
+  { key: 'IN_PROGRESS', label: 'In Progress', color: '#f59e0b', category: 'ACTIVE', order: 2 },
+  { key: 'IN_REVIEW', label: 'In Review', color: '#f97316', category: 'ACTIVE', order: 3 },
+  { key: 'DONE', label: 'Done', color: '#10b981', category: 'DONE', order: 4 },
+];
+
 export interface AuthState {
   token: string | null;
   user: UserSession | null;
   activeOrg: ActiveOrg | null;
   userOrgs: ActiveOrg[];
+  permissions: Record<string, boolean>;
+  roleName: string;
+  defaultWorkflowStatuses: WorkflowStatusDef[];
   isAuthenticated: boolean;
   isHydrated: boolean;
 
   setAuth: (token: string, user: UserSession, activeOrg: ActiveOrg, userOrgs?: ActiveOrg[]) => void;
+  setContext: (roleName: string, permissions: Record<string, boolean>, statuses: WorkflowStatusDef[]) => void;
   switchOrg: (org: ActiveOrg) => void;
   logout: () => void;
   setHydrated: (val: boolean) => void;
@@ -38,6 +57,9 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       activeOrg: null,
       userOrgs: [],
+      permissions: {},
+      roleName: '',
+      defaultWorkflowStatuses: DEFAULT_STATUSES,
       isAuthenticated: false,
       isHydrated: false,
 
@@ -55,6 +77,14 @@ export const useAuthStore = create<AuthState>()(
         });
       },
 
+      setContext: (roleName, permissions, statuses) => {
+        set({
+          roleName,
+          permissions,
+          defaultWorkflowStatuses: statuses?.length ? statuses : DEFAULT_STATUSES,
+        });
+      },
+
       switchOrg: (org) => {
         set({ activeOrg: org });
       },
@@ -69,6 +99,8 @@ export const useAuthStore = create<AuthState>()(
           user: null,
           activeOrg: null,
           userOrgs: [],
+          permissions: {},
+          roleName: '',
           isAuthenticated: false,
         });
       },

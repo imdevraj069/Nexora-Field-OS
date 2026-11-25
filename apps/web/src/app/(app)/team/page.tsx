@@ -1,10 +1,12 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Shield, UserPlus, CheckCircle2, Plus, Copy } from 'lucide-react';
+import { Shield, UserPlus, CheckCircle2, Plus, Copy, Sliders } from 'lucide-react';
 import { PERMISSION_FLAGS } from '@nexora/shared-types';
 import { useWorkspaceAuth } from '@/hooks/useWorkspaceAuth';
+import { useAuthStore, WorkflowStatusDef } from '@/stores/useAuthStore';
 import { apiRequest } from '@/services/nexoraClient';
+import { WorkflowStatusEditor } from '@/components/modals/WorkflowStatusEditor';
 import { RevealInView } from '@/components/ui/motion';
 
 interface MemberRow {
@@ -27,12 +29,14 @@ const ALL_FLAGS = Object.values(PERMISSION_FLAGS);
 
 export default function TeamManagementPage() {
   const { activeOrg, token } = useWorkspaceAuth();
+  const { permissions, defaultWorkflowStatuses, setContext, roleName } = useAuthStore();
   const [members, setMembers] = useState<MemberRow[]>([]);
   const [roles, setRoles] = useState<RoleRow[]>([]);
   const [inviteEmail, setInviteEmail] = useState('');
   const [selectedRoleId, setSelectedRoleId] = useState('');
   const [inviteUrl, setInviteUrl] = useState('');
   const [loadingInvite, setLoadingInvite] = useState(false);
+  const [showStatusEditor, setShowStatusEditor] = useState(false);
 
   const [newRoleName, setNewRoleName] = useState('');
   const [newRoleFlags, setNewRoleFlags] = useState<Record<string, boolean>>({
@@ -129,13 +133,30 @@ export default function TeamManagementPage() {
     }
   }
 
+  async function handleSaveOrgStatuses(statuses: WorkflowStatusDef[]) {
+    if (!token) return;
+    await apiRequest('/api/v1/org/workflow-statuses', { method: 'PUT', body: JSON.stringify({ statuses }) }, token);
+    setContext(roleName, permissions, statuses);
+  }
+
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-white">Team & Dynamic RBAC</h1>
-        <p className="mt-0.5 text-xs text-zinc-400">
-          Invite field personnel via Gmail SMTP, define custom permission roles, and assign multi-role access
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-white">Team & Dynamic RBAC</h1>
+          <p className="mt-0.5 text-xs text-zinc-400">
+            Invite field personnel via Gmail SMTP, define custom permission roles, and customize org workflow statuses
+          </p>
+        </div>
+
+        {permissions[PERMISSION_FLAGS.ORG_MANAGE_SETTINGS] && (
+          <button
+            onClick={() => setShowStatusEditor(true)}
+            className="flex items-center gap-2 rounded-full border border-white/[0.08] bg-[#121215] px-4 py-2 text-xs font-semibold text-zinc-200 hover:border-orange-500/40 cursor-pointer"
+          >
+            <Sliders size={14} className="text-orange-400" /> Default Workflow Statuses
+          </button>
+        )}
       </div>
 
       {/* Invite Member Card */}
@@ -283,6 +304,14 @@ export default function TeamManagementPage() {
           </div>
         </form>
       </RevealInView>
+
+      <WorkflowStatusEditor
+        isOpen={showStatusEditor}
+        title="Organization Default Workflow Statuses"
+        initialStatuses={defaultWorkflowStatuses}
+        onClose={() => setShowStatusEditor(false)}
+        onSave={handleSaveOrgStatuses}
+      />
     </div>
   );
 }

@@ -3,44 +3,78 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { motion } from 'motion/react';
 import {
   ArrowLeft,
   Layers,
   Plus,
-  CheckCircle2,
   Clock,
-  User,
   Sparkles,
   UserPlus,
   CheckSquare,
+  Edit3,
+  Trash2,
+  Sliders,
+  LayoutGrid,
+  Columns,
+  Check,
+  X,
 } from 'lucide-react';
+import { PERMISSION_FLAGS } from '@nexora/shared-types';
 import { useWorkspaceAuth } from '@/hooks/useWorkspaceAuth';
+import { useAuthStore, WorkflowStatusDef, DEFAULT_STATUSES } from '@/stores/useAuthStore';
 import { useDrawerStore } from '@/stores/useDrawerStore';
 import { apiRequest } from '@/services/nexoraClient';
 import { TaskCreateModal } from '@/components/modals/TaskCreateModal';
-import { RevealInView, AnimatedRing } from '@/components/ui/motion';
+import { ProjectEditModal } from '@/components/modals/ProjectEditModal';
+import { WorkflowStatusEditor } from '@/components/modals/WorkflowStatusEditor';
+import { RevealInView, AnimatedRing, MARLO_BACK_SPRING } from '@/components/ui/motion';
 
 export default function ProjectDetailView() {
   const params = useParams();
   const projectId = params?.projectId as string;
   const { activeOrg, token } = useWorkspaceAuth();
-  const { openTaskDrawer, refreshTick } = useDrawerStore();
+  const { permissions } = useAuthStore();
+  const { openTaskDrawer, refreshTick, notifyDataChanged } = useDrawerStore();
 
   const [project, setProject] = useState<any>(null);
   const [stages, setStages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<'stages' | 'board'>('stages');
+
   const [showTaskModal, setShowTaskModal] = useState(false);
+  const [showEditProject, setShowEditProject] = useState(false);
+  const [showStatusEditor, setShowStatusEditor] = useState(false);
   const [selectedStageId, setSelectedStageId] = useState<string>('');
+
   const [newStageName, setNewStageName] = useState('');
+  const [newStageDeadline, setNewStageDeadline] = useState('');
   const [addingStage, setAddingStage] = useState(false);
+  const [editingStageId, setEditingStageId] = useState<string | null>(null);
+  const [editStageName, setEditStageName] = useState('');
+  const [editStageDeadline, setEditStageDeadline] = useState('');
+
+  const [showBlueprintPanel, setShowBlueprintPanel] = useState(false);
+  const [blueprintBrief, setBlueprintBrief] = useState('');
+  const [applyingBlueprint, setApplyingBlueprint] = useState(false);
 
   const [partnerOrgId, setPartnerOrgId] = useState('');
   const [partnerUserId, setPartnerUserId] = useState('');
   const [partnerRoleName, setPartnerRoleName] = useState('Transit Partner');
   const [showCollabForm, setShowCollabForm] = useState(false);
 
+  const [dragTaskId, setDragTaskId] = useState<string | null>(null);
+  const [boardError, setBoardError] = useState('');
+
   const [analyzingAi, setAnalyzingAi] = useState(false);
   const [aiReport, setAiReport] = useState<any>(null);
+
+  const canManageProject = Boolean(
+    permissions[PERMISSION_FLAGS.PROJECT_MANAGE] || permissions[PERMISSION_FLAGS.ORG_MANAGE_SETTINGS]
+  );
+  const canManageStages = Boolean(
+    canManageProject || permissions[PERMISSION_FLAGS.STAGE_MANAGE_ALL]
+  );
 
   async function load() {
     if (!token || !activeOrg || !projectId) return;
@@ -53,6 +87,7 @@ export default function ProjectDetailView() {
       );
       setProject(res.project);
       setStages(res.stages || []);
+      setBlueprintBrief(res.project?.leadBrief || '');
       if (res.stages?.[0] && !selectedStageId) setSelectedStageId(res.stages[0].stageId);
     } catch (e) {
       console.error('Project detail load error:', e);
@@ -74,16 +109,99 @@ export default function ProjectDetailView() {
         `/api/v1/projects/${projectId}/stages`,
         {
           method: 'POST',
-          body: JSON.stringify({ name: newStageName.trim(), orderIndex: stages.length + 1 }),
+          body: JSON.stringify({
+            name: newStageName.trim(),
+            orderIndex: stages.length + 1,
+            deadline: newStageDeadline || undefined,
+          }),
         },
         token
       );
       setNewStageName('');
+      setNewStageDeadline('');
       await load();
     } catch (err) {
       alert((err as Error).message);
     } finally {
       setAddingStage(false);
+    }
+  }
+
+  async function handleSaveStageEdit(stageId: string) {
+    if (!token || !editStageName.trim()) return;
+    try {
+      await apiRequest(
+        `/api/v1/projects/${projectId}/stages/${stageId}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({
+            name: editStageName.trim(),
+            deadline: editStageDeadline || null,
+          }),
+        },
+        token
+      );
+      setEditingStageId(null);
+      await load();
+    } catch (err) {
+      alert((err as Error).message);
+    }
+  }
+
+  async function handleDeleteStage(stageId: string) {
+    if (!token || !confirm('Delete this milestone stage and its tasks?')) return;
+    try {
+      await apiRequest(`/api/v1/projects/${projectId}/stages/${stageId}`, { method: 'DELETE' }, token);
+      await load();
+    } catch (err) {
+      alert((err as Error).message);
+    }
+  }
+
+  async function handleApplyBlueprint(e: React.FormEvent) {
+    e.preventDefault();
+    if (!token || !blueprintBrief.trim()) return;
+    setApplyingBlueprint(true);
+    try {
+      await apiRequest(
+        `/api/v1/projects/${projectId}/apply-blueprint`,
+        { method: 'POST', body: JSON.stringify({ leadBrief: blueprintBrief.trim() }) },
+        token
+      );
+      setShowBlueprintPanel(false);
+      await load();
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setApplyingBlueprint(false);
+    }
+  }
+
+  async function handleSaveStatuses(statuses: WorkflowStatusDef[]) {
+    if (!token) return;
+    await apiRequest(
+      `/api/v1/projects/${projectId}`,
+      { method: 'PATCH', body: JSON.stringify({ workflowStatuses: statuses }) },
+      token
+    );
+    await load();
+  }
+
+  async function handleDropTask(targetStatus: string) {
+    if (!dragTaskId || !token) return;
+    const taskId = dragTaskId;
+    setDragTaskId(null);
+    setBoardError('');
+    try {
+      await apiRequest(
+        `/api/v1/projects/${projectId}/tasks/${taskId}/status`,
+        { method: 'PATCH', body: JSON.stringify({ status: targetStatus }) },
+        token
+      );
+      notifyDataChanged();
+      await load();
+    } catch (err) {
+      setBoardError((err as Error).message);
     }
   }
 
@@ -126,8 +244,11 @@ export default function ProjectDetailView() {
     }
   }
 
+  const workflowStatuses: WorkflowStatusDef[] =
+    project?.workflowStatuses?.length > 0 ? project.workflowStatuses : DEFAULT_STATUSES;
+  const doneKeys = new Set(workflowStatuses.filter((s) => s.category === 'DONE').map((s) => s.key));
   const allTasks = stages.flatMap((s) => s.tasks || []);
-  const doneTasks = allTasks.filter((t) => ['COMPLETED', 'VERIFIED', 'SUBMITTED'].includes(t.status)).length;
+  const doneTasks = allTasks.filter((t) => doneKeys.has(t.status) || ['DONE', 'COMPLETED', 'VERIFIED'].includes(t.status)).length;
   const pct = allTasks.length > 0 ? Math.round((doneTasks / allTasks.length) * 100) : 0;
 
   if (loading && !project) {
@@ -136,10 +257,7 @@ export default function ProjectDetailView() {
 
   return (
     <div className="space-y-5">
-      <Link
-        href="/projects"
-        className="inline-flex items-center gap-1.5 text-xs text-zinc-500 hover:text-orange-400 transition-colors"
-      >
+      <Link href="/projects" className="inline-flex items-center gap-1.5 text-xs text-zinc-500 hover:text-orange-400 transition-colors">
         <ArrowLeft size={13} /> Back to Projects
       </Link>
 
@@ -147,36 +265,63 @@ export default function ProjectDetailView() {
       <RevealInView className="rounded-[22px] border border-white/[0.07] bg-[#121215]/95 p-6 shadow-xl">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2.5 flex-wrap">
               <h1 className="font-display text-2xl font-bold tracking-tight text-white">{project?.title}</h1>
               <span className="rounded-full border border-orange-500/30 bg-orange-500/10 px-2.5 py-0.5 text-xs font-mono text-orange-300">
                 {project?.status}
               </span>
+              {canManageProject && (
+                <button
+                  onClick={() => setShowEditProject(true)}
+                  className="inline-flex items-center gap-1 rounded-full border border-white/[0.08] bg-[#18181c] px-2.5 py-1 text-[11px] text-zinc-300 hover:text-orange-300 cursor-pointer"
+                >
+                  <Edit3 size={11} /> Edit Project
+                </button>
+              )}
             </div>
-            <p className="text-xs font-mono text-zinc-500 mt-1">{projectId}</p>
+            <p className="text-xs font-mono text-zinc-500 mt-1">
+              {projectId} {project?.managerUserId && `· Manager: ${project.managerUserId}`}
+              {project?.targetEndDate && ` · Due: ${project.targetEndDate}`}
+            </p>
             {project?.description && (
               <p className="text-sm text-zinc-400 mt-2 max-w-3xl leading-relaxed">{project.description}</p>
             )}
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => setShowCollabForm(!showCollabForm)}
-              className="flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-[#18181c] px-3.5 py-2 text-xs font-semibold text-zinc-200 hover:border-orange-500/40 transition-all cursor-pointer"
-            >
-              <UserPlus size={13} className="text-orange-400" /> Partner Org
-            </button>
+            {canManageProject && (
+              <>
+                <button
+                  onClick={() => setShowStatusEditor(true)}
+                  className="flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-[#18181c] px-3.5 py-2 text-xs font-semibold text-zinc-200 hover:border-orange-500/40 cursor-pointer"
+                >
+                  <Sliders size={13} className="text-orange-400" /> Statuses
+                </button>
+                <button
+                  onClick={() => setShowBlueprintPanel(!showBlueprintPanel)}
+                  className="flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-[#18181c] px-3.5 py-2 text-xs font-semibold text-zinc-200 hover:border-orange-500/40 cursor-pointer"
+                >
+                  <Sparkles size={13} className="text-orange-400" /> Lead-to-Plan
+                </button>
+                <button
+                  onClick={() => setShowCollabForm(!showCollabForm)}
+                  className="flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-[#18181c] px-3.5 py-2 text-xs font-semibold text-zinc-200 hover:border-orange-500/40 cursor-pointer"
+                >
+                  <UserPlus size={13} className="text-orange-400" /> Partner
+                </button>
+              </>
+            )}
             <button
               onClick={() => void triggerAiAnalysis()}
               disabled={analyzingAi}
-              className="flex items-center gap-1.5 rounded-full border border-orange-500/30 bg-orange-500/10 px-3.5 py-2 text-xs font-semibold text-orange-300 hover:bg-orange-500/20 disabled:opacity-50 transition-all cursor-pointer"
+              className="flex items-center gap-1.5 rounded-full border border-orange-500/30 bg-orange-500/10 px-3.5 py-2 text-xs font-semibold text-orange-300 hover:bg-orange-500/20 disabled:opacity-50 cursor-pointer"
             >
               <Sparkles size={13} className={analyzingAi ? 'animate-spin' : ''} />
               {analyzingAi ? 'Analyzing…' : 'AI Synthesis'}
             </button>
             <button
               onClick={() => setShowTaskModal(true)}
-              className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-red-600 via-orange-600 to-orange-500 px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-orange-950/40 hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer"
+              className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-red-600 via-orange-600 to-orange-500 px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-orange-950/40 hover:brightness-110 cursor-pointer"
             >
               <Plus size={14} /> Add Task
             </button>
@@ -184,7 +329,55 @@ export default function ProjectDetailView() {
         </div>
       </RevealInView>
 
-      {/* Marlo 4-Stat Hero Strip (.pd__stats) */}
+      {/* Post-Creation Editable Lead-to-Plan Blueprint Textarea */}
+      {showBlueprintPanel && (
+        <form onSubmit={handleApplyBlueprint} className="rounded-[22px] border border-orange-500/30 bg-[#151314] p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-mono uppercase tracking-wider text-orange-300 flex items-center gap-1.5">
+              <Sparkles size={13} /> Lead-to-Plan Scope Brief (Generate & Append Milestones)
+            </span>
+          </div>
+          <textarea
+            rows={4}
+            required
+            value={blueprintBrief}
+            onChange={(e) => setBlueprintBrief(e.target.value)}
+            placeholder="Describe project scope, site details, or client changes to automatically generate and append milestone stages..."
+            className="w-full rounded-2xl border border-white/[0.08] bg-[#121215] p-3 text-xs text-white placeholder-zinc-500 outline-none focus:border-orange-500"
+          />
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => setShowBlueprintPanel(false)} className="rounded-xl border border-white/[0.08] px-3.5 py-1.5 text-xs text-zinc-300 cursor-pointer">
+              Close
+            </button>
+            <button type="submit" disabled={applyingBlueprint} className="rounded-full bg-gradient-to-r from-red-600 to-orange-500 px-4 py-1.5 text-xs font-semibold text-white cursor-pointer disabled:opacity-50">
+              {applyingBlueprint ? 'Generating Stages…' : 'Save Brief & Append AI Stages'}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* Partner Invite Form */}
+      {showCollabForm && (
+        <form onSubmit={handleInvitePartner} className="rounded-[22px] border border-orange-500/30 bg-[#151314] p-5 flex flex-wrap items-end gap-3">
+          <div className="flex-1 min-w-[160px]">
+            <label className="block text-[11px] font-mono text-zinc-400 mb-1">Partner Org ID</label>
+            <input type="text" required value={partnerOrgId} onChange={(e) => setPartnerOrgId(e.target.value)} placeholder="PTR-26-XXXXX" className="w-full rounded-xl border border-white/[0.08] bg-[#121215] px-3 py-2 text-xs text-white font-mono outline-none focus:border-orange-500" />
+          </div>
+          <div className="flex-1 min-w-[160px]">
+            <label className="block text-[11px] font-mono text-zinc-400 mb-1">Partner User ID</label>
+            <input type="text" required value={partnerUserId} onChange={(e) => setPartnerUserId(e.target.value)} placeholder="USR-..." className="w-full rounded-xl border border-white/[0.08] bg-[#121215] px-3 py-2 text-xs text-white font-mono outline-none focus:border-orange-500" />
+          </div>
+          <div className="min-w-[160px]">
+            <label className="block text-[11px] font-mono text-zinc-400 mb-1">Project Role</label>
+            <input type="text" value={partnerRoleName} onChange={(e) => setPartnerRoleName(e.target.value)} className="w-full rounded-xl border border-white/[0.08] bg-[#121215] px-3 py-2 text-xs text-white outline-none focus:border-orange-500" />
+          </div>
+          <button type="submit" className="rounded-xl bg-gradient-to-r from-red-600 to-orange-500 px-4 py-2 text-xs font-semibold text-white cursor-pointer">
+            Grant Access
+          </button>
+        </form>
+      )}
+
+      {/* 4-Stat Hero Strip */}
       <div className="grid grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr] gap-4">
         <RevealInView className="rounded-[22px] border border-white/[0.07] bg-[#121215]/95 p-5 flex items-center justify-between">
           <div>
@@ -194,192 +387,257 @@ export default function ProjectDetailView() {
           </div>
           <AnimatedRing percent={pct} size={58} strokeWidth={5} />
         </RevealInView>
-
         <RevealInView delay={0.04} className="rounded-[22px] border border-white/[0.07] bg-[#121215]/95 p-5">
           <span className="text-[11px] font-mono uppercase text-zinc-500">Milestones</span>
           <p className="font-display text-2xl font-bold text-white mt-1 tabular-nums">{stages.length}</p>
           <p className="text-xs text-zinc-400">Execution stages</p>
         </RevealInView>
-
         <RevealInView delay={0.08} className="rounded-[22px] border border-white/[0.07] bg-[#121215]/95 p-5">
-          <span className="text-[11px] font-mono uppercase text-zinc-500">Active Tasks</span>
-          <p className="font-display text-2xl font-bold text-orange-400 mt-1 tabular-nums">{allTasks.length - doneTasks}</p>
-          <p className="text-xs text-zinc-400">Remaining in pipeline</p>
+          <span className="text-[11px] font-mono uppercase text-zinc-500">Custom Statuses</span>
+          <p className="font-display text-2xl font-bold text-orange-400 mt-1 tabular-nums">{workflowStatuses.length}</p>
+          <p className="text-xs text-zinc-400">Kanban workflow lanes</p>
         </RevealInView>
-
         <RevealInView delay={0.12} className="rounded-[22px] border border-white/[0.07] bg-[#121215]/95 p-5">
           <span className="text-[11px] font-mono uppercase text-zinc-500">Collaborators</span>
-          <p className="font-display text-2xl font-bold text-emerald-400 mt-1 tabular-nums">
-            {project?.collaborators?.length || 0}
-          </p>
+          <p className="font-display text-2xl font-bold text-emerald-400 mt-1 tabular-nums">{project?.collaborators?.length || 0}</p>
           <p className="text-xs text-zinc-400">Cross-org partners</p>
         </RevealInView>
       </div>
 
-      {/* Cross-Org Partner Invite Drawer/Panel */}
-      {showCollabForm && (
-        <form
-          onSubmit={handleInvitePartner}
-          className="rounded-[22px] border border-orange-500/30 bg-[#151314] p-5 flex flex-wrap items-end gap-3"
-        >
-          <div className="flex-1 min-w-[160px]">
-            <label className="block text-[11px] font-mono text-zinc-400 mb-1">Partner Org ID</label>
-            <input
-              type="text"
-              required
-              value={partnerOrgId}
-              onChange={(e) => setPartnerOrgId(e.target.value)}
-              placeholder="PTR-26-XXXXX"
-              className="w-full rounded-xl border border-white/[0.08] bg-[#121215] px-3 py-2 text-xs text-white font-mono outline-none focus:border-orange-500"
-            />
-          </div>
-          <div className="flex-1 min-w-[160px]">
-            <label className="block text-[11px] font-mono text-zinc-400 mb-1">Partner User ID</label>
-            <input
-              type="text"
-              required
-              value={partnerUserId}
-              onChange={(e) => setPartnerUserId(e.target.value)}
-              placeholder="USR-..."
-              className="w-full rounded-xl border border-white/[0.08] bg-[#121215] px-3 py-2 text-xs text-white font-mono outline-none focus:border-orange-500"
-            />
-          </div>
-          <div className="min-w-[160px]">
-            <label className="block text-[11px] font-mono text-zinc-400 mb-1">Project Role</label>
-            <input
-              type="text"
-              value={partnerRoleName}
-              onChange={(e) => setPartnerRoleName(e.target.value)}
-              className="w-full rounded-xl border border-white/[0.08] bg-[#121215] px-3 py-2 text-xs text-white outline-none focus:border-orange-500"
-            />
-          </div>
-          <button
-            type="submit"
-            className="rounded-xl bg-gradient-to-r from-red-600 to-orange-500 px-4 py-2 text-xs font-semibold text-white cursor-pointer"
-          >
-            Grant Stage Access
-          </button>
-        </form>
-      )}
-
       {/* AI Report */}
       {aiReport && (
-        <RevealInView className="rounded-[22px] border border-orange-500/30 bg-[#151212] p-6 shadow-2xl space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <Sparkles className="text-orange-400" size={18} />
-              <h2 className="font-display text-base font-bold text-white">Gemini 2.5 Field Intelligence Report</h2>
-            </div>
-            <div className="flex items-center gap-4 font-mono text-xs">
-              <span>Health: <strong className="text-orange-400">{aiReport.overall_health_score}/100</strong></span>
-              <span>Progress: <strong className="text-emerald-400">{aiReport.completion_percentage}%</strong></span>
-            </div>
+        <RevealInView className="rounded-[22px] border border-orange-500/30 bg-[#151212] p-6 shadow-2xl space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="font-display text-base font-bold text-white flex items-center gap-2">
+              <Sparkles className="text-orange-400" size={17} /> Gemini 2.5 Intelligence Report
+            </h2>
+            <span className="font-mono text-xs text-orange-400">Health: {aiReport.overall_health_score}/100</span>
           </div>
-          <p className="text-xs text-zinc-300 leading-relaxed bg-[#18181c] p-4 rounded-2xl border border-white/[0.05]">
-            {aiReport.executive_summary}
-          </p>
-          {aiReport.recommendations && (
-            <div className="text-xs text-orange-200 bg-orange-950/25 p-3.5 rounded-2xl border border-orange-500/20">
-              <strong>Recommendations:</strong> {aiReport.recommendations}
-            </div>
-          )}
+          <p className="text-xs text-zinc-300 leading-relaxed bg-[#18181c] p-3.5 rounded-2xl">{aiReport.executive_summary}</p>
         </RevealInView>
       )}
 
-      {/* Milestone Stages & Inline Stage Creator */}
+      {/* Stages | Project Kanban Board Toggle + Add Stage */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Layers size={16} className="text-orange-400" />
-          <h2 className="font-display text-base font-bold text-white">Milestone Execution Stages</h2>
+        <div className="flex items-center gap-3">
+          <div className="flex rounded-full border border-white/[0.07] bg-[#121215] p-1">
+            <button
+              onClick={() => setViewMode('stages')}
+              className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium cursor-pointer ${
+                viewMode === 'stages' ? 'bg-orange-500/20 text-orange-300' : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <LayoutGrid size={13} /> Milestones
+            </button>
+            <button
+              onClick={() => setViewMode('board')}
+              className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium cursor-pointer ${
+                viewMode === 'board' ? 'bg-orange-500/20 text-orange-300' : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <Columns size={13} /> Kanban Board
+            </button>
+          </div>
         </div>
 
-        <form onSubmit={handleAddStage} className="flex gap-2">
-          <input
-            type="text"
-            value={newStageName}
-            onChange={(e) => setNewStageName(e.target.value)}
-            placeholder="New milestone stage name…"
-            className="rounded-full border border-white/[0.08] bg-[#121215] px-4 py-1.5 text-xs text-white placeholder-zinc-500 outline-none focus:border-orange-500"
-          />
-          <button
-            type="submit"
-            disabled={addingStage || !newStageName.trim()}
-            className="rounded-full border border-white/[0.08] bg-[#18181c] px-3.5 py-1.5 text-xs font-semibold text-zinc-200 hover:border-orange-500/40 disabled:opacity-50 cursor-pointer"
-          >
-            + Add Stage
-          </button>
-        </form>
+        {canManageStages && (
+          <form onSubmit={handleAddStage} className="flex flex-wrap gap-2">
+            <input
+              type="text"
+              value={newStageName}
+              onChange={(e) => setNewStageName(e.target.value)}
+              placeholder="New milestone name…"
+              className="rounded-full border border-white/[0.08] bg-[#121215] px-4 py-1.5 text-xs text-white placeholder-zinc-500 outline-none focus:border-orange-500"
+            />
+            <input
+              type="date"
+              value={newStageDeadline}
+              onChange={(e) => setNewStageDeadline(e.target.value)}
+              className="rounded-full border border-white/[0.08] bg-[#121215] px-3 py-1.5 text-xs text-zinc-300 outline-none focus:border-orange-500"
+            />
+            <button
+              type="submit"
+              disabled={addingStage || !newStageName.trim()}
+              className="rounded-full border border-white/[0.08] bg-[#18181c] px-4 py-1.5 text-xs font-semibold text-zinc-200 hover:border-orange-500/40 disabled:opacity-50 cursor-pointer"
+            >
+              + Add Milestone
+            </button>
+          </form>
+        )}
       </div>
 
-      {/* Marlo Stage Columns (.pd__cols) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 items-start">
-        {stages.map((stage, idx) => (
-          <RevealInView
-            key={stage.stageId}
-            delay={idx * 0.05}
-            className="rounded-[22px] border border-white/[0.07] bg-[#121215]/95 p-4 shadow-xl space-y-3"
-          >
-            <div className="flex items-center justify-between gap-2 pb-2 border-b border-white/[0.06]">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-orange-500/15 border border-orange-500/30 font-mono text-xs font-bold text-orange-400">
-                  {stage.orderIndex || idx + 1}
-                </span>
-                <div className="min-w-0">
-                  <h3 className="font-display text-sm font-bold text-white truncate">{stage.name}</h3>
-                  <p className="text-[10px] font-mono text-zinc-500">{stage.tasks?.length || 0} tasks</p>
+      {boardError && (
+        <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-xs text-rose-300">{boardError}</div>
+      )}
+
+      {viewMode === 'stages' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 items-start">
+          {stages.length === 0 ? (
+            <div className="col-span-full rounded-[22px] border border-dashed border-white/[0.08] py-12 text-center text-xs text-zinc-500">
+              No milestones yet. Add a custom milestone above or use Lead-to-Plan AI to generate them.
+            </div>
+          ) : (
+            stages.map((stage, idx) => (
+              <RevealInView key={stage.stageId} delay={idx * 0.04} className="rounded-[22px] border border-white/[0.07] bg-[#121215]/95 p-4 shadow-xl space-y-3">
+                {editingStageId === stage.stageId ? (
+                  <div className="space-y-2 pb-2 border-b border-white/[0.06]">
+                    <input
+                      type="text"
+                      value={editStageName}
+                      onChange={(e) => setEditStageName(e.target.value)}
+                      className="w-full rounded-xl border border-white/[0.1] bg-[#18181c] px-3 py-1.5 text-xs text-white outline-none focus:border-orange-500"
+                    />
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="date"
+                        value={editStageDeadline}
+                        onChange={(e) => setEditStageDeadline(e.target.value)}
+                        className="flex-1 rounded-xl border border-white/[0.1] bg-[#18181c] px-2.5 py-1 text-[11px] text-zinc-300 outline-none"
+                      />
+                      <button onClick={() => void handleSaveStageEdit(stage.stageId)} className="rounded-lg bg-emerald-500/20 p-1.5 text-emerald-300 cursor-pointer">
+                        <Check size={13} />
+                      </button>
+                      <button onClick={() => setEditingStageId(null)} className="rounded-lg bg-zinc-800 p-1.5 text-zinc-400 cursor-pointer">
+                        <X size={13} />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-2 pb-2 border-b border-white/[0.06]">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-orange-500/15 border border-orange-500/30 font-mono text-xs font-bold text-orange-400">
+                        {stage.orderIndex || idx + 1}
+                      </span>
+                      <div className="min-w-0">
+                        <h3 className="font-display text-sm font-bold text-white truncate">{stage.name}</h3>
+                        <p className="text-[10px] font-mono text-zinc-500">
+                          {stage.tasks?.length || 0} tasks {stage.deadline ? `· Due ${stage.deadline}` : ''}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {canManageStages && (
+                        <>
+                          <button
+                            onClick={() => {
+                              setEditingStageId(stage.stageId);
+                              setEditStageName(stage.name);
+                              setEditStageDeadline(stage.deadline || '');
+                            }}
+                            className="p-1.5 text-zinc-500 hover:text-white cursor-pointer"
+                            title="Edit Milestone"
+                          >
+                            <Edit3 size={12} />
+                          </button>
+                          <button
+                            onClick={() => void handleDeleteStage(stage.stageId)}
+                            className="p-1.5 text-zinc-500 hover:text-red-400 cursor-pointer"
+                            title="Delete Milestone"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </>
+                      )}
+                      <button
+                        onClick={() => {
+                          setSelectedStageId(stage.stageId);
+                          setShowTaskModal(true);
+                        }}
+                        className="rounded-full border border-white/[0.08] bg-[#18181c] px-2.5 py-1 text-[11px] font-semibold text-zinc-300 hover:text-orange-400 cursor-pointer"
+                      >
+                        + Task
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  {(!stage.tasks || stage.tasks.length === 0) ? (
+                    <div className="rounded-2xl border border-dashed border-white/[0.08] py-6 text-center text-xs text-zinc-500">
+                      No tasks in this milestone
+                    </div>
+                  ) : (
+                    stage.tasks.map((t: any) => {
+                      const chkDone = (t.checklist || []).filter((c: any) => c.completed).length;
+                      const chkTotal = (t.checklist || []).length;
+                      return (
+                        <button
+                          key={t.taskId}
+                          onClick={() => openTaskDrawer(t.taskId, projectId)}
+                          className="w-full text-left rounded-2xl border border-white/[0.05] bg-[#18181c] p-3.5 hover:border-orange-500/40 hover:bg-[#1d1d22] transition-all cursor-pointer group"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-xs font-semibold text-zinc-100 group-hover:text-orange-300 transition-colors">
+                              {t.title}
+                            </p>
+                            <span className="shrink-0 rounded-full border border-orange-500/25 bg-orange-500/10 px-2 py-0.5 text-[10px] font-mono text-orange-300">
+                              {t.status}
+                            </span>
+                          </div>
+                          <div className="mt-2 flex items-center justify-between text-[10px] font-mono text-zinc-500">
+                            <span className="flex items-center gap-1">
+                              <CheckSquare size={11} className="text-orange-400" />
+                              {chkTotal > 0 ? `${chkDone}/${chkTotal} checks` : 'No checklist'}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Clock size={10} /> {t.deadline ? t.deadline.slice(0, 10) : 'No due'}
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </RevealInView>
+            ))
+          )}
+        </div>
+      ) : (
+        /* Project-Scoped Dynamic Kanban Board */
+        <div className="flex gap-4 overflow-x-auto pb-4 items-start">
+          {workflowStatuses.map((lane) => {
+            const laneTasks = allTasks.filter((t) => t.status === lane.key);
+            return (
+              <div
+                key={lane.key}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={() => void handleDropTask(lane.key)}
+                className="w-[290px] shrink-0 rounded-[22px] border border-white/[0.07] bg-[#141418] p-3 min-h-[280px]"
+              >
+                <div className="flex items-center justify-between px-1.5 pb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: lane.color }} />
+                    <span className="font-display text-sm font-bold text-white">{lane.label}</span>
+                  </div>
+                  <span className="rounded-full bg-[#1e1e24] px-2 py-0.5 font-mono text-[11px] text-zinc-400 tabular-nums">
+                    {laneTasks.length}
+                  </span>
+                </div>
+
+                <div className="space-y-2.5">
+                  {laneTasks.map((t: any) => (
+                    <motion.div
+                      key={t.taskId}
+                      layout
+                      transition={MARLO_BACK_SPRING}
+                      draggable
+                      onDragStart={() => setDragTaskId(t.taskId)}
+                      onClick={() => openTaskDrawer(t.taskId, projectId)}
+                      className="relative rounded-2xl border border-white/[0.06] bg-[#1a1a20] p-3.5 pl-4 cursor-grab active:cursor-grabbing hover:border-orange-500/40"
+                    >
+                      <span className="absolute left-0 top-3.5 bottom-3.5 w-[3px] rounded-r" style={{ backgroundColor: lane.color }} />
+                      <p className="text-xs font-semibold text-white">{t.title}</p>
+                      <p className="mt-1.5 text-[10px] font-mono text-zinc-500">
+                        {(t.checklist || []).length} checks · {(t.fileRequirements || []).length} file slots
+                      </p>
+                    </motion.div>
+                  ))}
                 </div>
               </div>
-              <button
-                onClick={() => {
-                  setSelectedStageId(stage.stageId);
-                  setShowTaskModal(true);
-                }}
-                className="rounded-full border border-white/[0.08] bg-[#18181c] px-2.5 py-1 text-[11px] font-semibold text-zinc-300 hover:text-orange-400 cursor-pointer"
-              >
-                + Task
-              </button>
-            </div>
-
-            <div className="space-y-2">
-              {(!stage.tasks || stage.tasks.length === 0) ? (
-                <div className="rounded-2xl border border-dashed border-white/[0.08] py-6 text-center text-xs text-zinc-500">
-                  No tasks in this stage
-                </div>
-              ) : (
-                stage.tasks.map((t: any) => {
-                  const chkDone = (t.checklist || []).filter((c: any) => c.completed).length;
-                  const chkTotal = (t.checklist || []).length;
-                  return (
-                    <button
-                      key={t.taskId}
-                      onClick={() => openTaskDrawer(t.taskId, projectId)}
-                      className="w-full text-left rounded-2xl border border-white/[0.05] bg-[#18181c] p-3.5 hover:border-orange-500/40 hover:bg-[#1d1d22] transition-all cursor-pointer group"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="text-xs font-semibold text-zinc-100 group-hover:text-orange-300 transition-colors">
-                          {t.title}
-                        </p>
-                        <span className="shrink-0 rounded-full border border-orange-500/25 bg-orange-500/10 px-2 py-0.5 text-[10px] font-mono text-orange-300">
-                          {t.status}
-                        </span>
-                      </div>
-                      <div className="mt-2 flex items-center justify-between text-[10px] font-mono text-zinc-500">
-                        <span className="flex items-center gap-1">
-                          <CheckSquare size={11} className="text-orange-400" />
-                          {chkTotal > 0 ? `${chkDone}/${chkTotal} checks` : 'No checklist'}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Clock size={10} /> {t.deadline ? t.deadline.slice(0, 10) : 'No due'}
-                        </span>
-                      </div>
-                    </button>
-                  );
-                })
-              )}
-            </div>
-          </RevealInView>
-        ))}
-      </div>
+            );
+          })}
+        </div>
+      )}
 
       <TaskCreateModal
         isOpen={showTaskModal}
@@ -392,6 +650,27 @@ export default function ProjectDetailView() {
           void load();
         }}
       />
+
+      {project && (
+        <>
+          <ProjectEditModal
+            isOpen={showEditProject}
+            project={project}
+            onClose={() => setShowEditProject(false)}
+            onSuccess={() => {
+              setShowEditProject(false);
+              void load();
+            }}
+          />
+          <WorkflowStatusEditor
+            isOpen={showStatusEditor}
+            title={`Workflow Statuses: ${project.title}`}
+            initialStatuses={workflowStatuses}
+            onClose={() => setShowStatusEditor(false)}
+            onSave={handleSaveStatuses}
+          />
+        </>
+      )}
     </div>
   );
 }

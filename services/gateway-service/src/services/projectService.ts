@@ -11,20 +11,26 @@ import { aiClient, grpcCall, identityClient, storageClient } from '../grpc/clien
 import { AppError } from '../utils/http';
 import { emitProjectEvent } from '../ws/socketServer';
 
-const STAGE_TEMPLATES: Record<string, string[]> = {
-  solar: [
-    'Site Survey & Civil Grading',
-    'Mounting Structure & Tracker Assembly',
-    'Inverter, DC Wiring & Earthing',
-    'SCADA Interlock & Grid Handover',
-  ],
-  telecom: [
-    'Tower Structural Load Audit',
-    'RF Antenna & Microwave Alignment',
-    'Backhaul Fiber & Power Commissioning',
-  ],
-  standard: ['Mobilization & Dispatch', 'On-Field Execution & Verification'],
-};
+export interface WorkflowStatusDef {
+  key: string;
+  label: string;
+  color: string;
+  category: 'OPEN' | 'ACTIVE' | 'DONE';
+  order: number;
+}
+
+export const DEFAULT_WORKFLOW_STATUSES: WorkflowStatusDef[] = [
+  { key: 'TODO', label: 'To Do', color: '#71717a', category: 'OPEN', order: 1 },
+  { key: 'IN_PROGRESS', label: 'In Progress', color: '#f59e0b', category: 'ACTIVE', order: 2 },
+  { key: 'IN_REVIEW', label: 'In Review', color: '#f97316', category: 'ACTIVE', order: 3 },
+  { key: 'DONE', label: 'Done', color: '#10b981', category: 'DONE', order: 4 },
+];
+
+function resolveStatuses(raw: unknown, orgRaw?: unknown): WorkflowStatusDef[] {
+  if (Array.isArray(raw) && raw.length > 0) return raw as WorkflowStatusDef[];
+  if (Array.isArray(orgRaw) && orgRaw.length > 0) return orgRaw as WorkflowStatusDef[];
+  return DEFAULT_WORKFLOW_STATUSES;
+}
 
 export const ProjectService = {
   async getOrgMemberRoleContext(orgId: string, shardId: 1 | 2 | 3, userId: string): Promise<RolePermissionContext> {
@@ -76,13 +82,59 @@ export const ProjectService = {
     };
   },
 
+  async getMyContext(auth: AuthContext) {
+    const roleCtx = await this.getOrgMemberRoleContext(auth.activeOrgId, auth.shardId, auth.userId);
+    const pool = dataRouter.postgres.getReadPool(auth.shardId, true);
+    const orgRes = await pool.query(`SELECT default_workflow_statuses FROM organizations WHERE org_id = $1`, [
+      auth.activeOrgId,
+    ]);
+    return {
+      userId: auth.userId,
+      activeOrgId: auth.activeOrgId,
+      roleName: roleCtx.roleName,
+      flags: roleCtx.flags,
+      allocatedStageIds: roleCtx.allocatedStageIds,
+      defaultWorkflowStatuses: resolveStatuses(orgRes.rows[0]?.default_workflow_statuses),
+    };
+  },
+
+  async getOrgWorkflowStatuses(auth: AuthContext) {
+    const pool = dataRouter.postgres.getReadPool(auth.shardId, true);
+    const res = await pool.query(`SELECT default_workflow_statuses FROM organizations WHERE org_id = $1`, [
+      auth.activeOrgId,
+    ]);
+    return resolveStatuses(res.rows[0]?.default_workflow_statuses);
+  },
+
+  async updateOrgWorkflowStatuses(auth: AuthContext, statuses: WorkflowStatusDef[]) {
+    const roleCtx = await this.getOrgMemberRoleContext(auth.activeOrgId, auth.shardId, auth.userId);
+    if (!hasPermission(roleCtx, PERMISSION_FLAGS.ORG_MANAGE_SETTINGS)) {
+      throw new AppError(403, 'Forbidden: requires org.manage_settings');
+    }
+    if (!Array.isArray(statuses) || statuses.length === 0) {
+      throw new AppError(400, 'At least one workflow status is required');
+    }
+    await dataRouter.postgres
+      .getPrimaryPool(auth.shardId)
+      .query(`UPDATE organizations SET default_workflow_statuses = $1::jsonb WHERE org_id = $2`, [
+        JSON.stringify(statuses),
+        auth.activeOrgId,
+      ]);
+    return statuses;
+  },
+
   async listProjects(auth: AuthContext) {
     const homePool = dataRouter.postgres.getReadPool(auth.shardId, true);
+    const orgRow = await homePool.query(`SELECT default_workflow_statuses FROM organizations WHERE org_id = $1`, [
+      auth.activeOrgId,
+    ]);
+    const orgStatuses = orgRow.rows[0]?.default_workflow_statuses;
+
     const homeProjects = await homePool.query(
-      `SELECT p.project_id, p.org_id, p.title, p.description, p.status, p.created_at,
+      `SELECT p.project_id, p.org_id, p.title, p.description, p.status, p.manager_user_id, p.lead_brief, p.workflow_statuses, p.start_date, p.target_end_date, p.created_at,
               (SELECT COUNT(*)::int FROM stages s WHERE s.project_id = p.project_id) AS stages_count,
               (SELECT COUNT(*)::int FROM tasks t WHERE t.project_id = p.project_id) AS tasks_count,
-              (SELECT COUNT(*)::int FROM tasks t WHERE t.project_id = p.project_id AND t.status IN ('COMPLETED', 'VERIFIED', 'SUBMITTED')) AS completed_tasks_count
+              (SELECT COUNT(*)::int FROM tasks t WHERE t.project_id = p.project_id AND t.status IN ('DONE', 'COMPLETED', 'VERIFIED', 'SUBMITTED')) AS completed_tasks_count
        FROM projects p WHERE p.org_id = $1 ORDER BY p.created_at DESC`,
       [auth.activeOrgId],
     );
@@ -96,10 +148,10 @@ export const ProjectService = {
       collabRows.rows.map(async (c) => {
         const p = dataRouter.postgres.getReadPool(c.owner_shard_id, true);
         const r = await p.query(
-          `SELECT p.project_id, p.org_id, p.title, p.description, p.status, p.created_at,
+          `SELECT p.project_id, p.org_id, p.title, p.description, p.status, p.manager_user_id, p.lead_brief, p.workflow_statuses, p.start_date, p.target_end_date, p.created_at,
                   (SELECT COUNT(*)::int FROM stages s WHERE s.project_id = p.project_id) AS stages_count,
                   (SELECT COUNT(*)::int FROM tasks t WHERE t.project_id = p.project_id) AS tasks_count,
-                  (SELECT COUNT(*)::int FROM tasks t WHERE t.project_id = p.project_id AND t.status IN ('COMPLETED', 'VERIFIED', 'SUBMITTED')) AS completed_tasks_count
+                  (SELECT COUNT(*)::int FROM tasks t WHERE t.project_id = p.project_id AND t.status IN ('DONE', 'COMPLETED', 'VERIFIED', 'SUBMITTED')) AS completed_tasks_count
            FROM projects p WHERE p.project_id = $1`,
           [c.project_id],
         );
@@ -113,6 +165,11 @@ export const ProjectService = {
       title: p.title,
       description: p.description ?? '',
       status: p.status,
+      managerUserId: p.manager_user_id ?? null,
+      leadBrief: p.lead_brief ?? '',
+      workflowStatuses: resolveStatuses(p.workflow_statuses, orgStatuses),
+      startDate: p.start_date ? new Date(p.start_date).toISOString().slice(0, 10) : null,
+      targetEndDate: p.target_end_date ? new Date(p.target_end_date).toISOString().slice(0, 10) : null,
       createdAt: p.created_at ? new Date(p.created_at).toISOString() : new Date().toISOString(),
       stagesCount: Number(p.stages_count ?? 0),
       tasksCount: Number(p.tasks_count ?? 0),
@@ -122,10 +179,12 @@ export const ProjectService = {
   },
 
   async getProjectTree(auth: AuthContext, projectId: string) {
-    const { ownerShardId, roleCtx } = await this.resolveAccess(auth.userId, auth.activeOrgId, projectId);
+    const { ownerOrgId, ownerShardId, roleCtx } = await this.resolveAccess(auth.userId, auth.activeOrgId, projectId);
     const pool = dataRouter.postgres.getReadPool(ownerShardId, true);
+    const orgRow = await pool.query(`SELECT default_workflow_statuses FROM organizations WHERE org_id = $1`, [ownerOrgId]);
     const pr = await pool.query(
-      `SELECT project_id, org_id, title, description, status, created_at FROM projects WHERE project_id = $1`,
+      `SELECT project_id, org_id, title, description, status, manager_user_id, lead_brief, workflow_statuses, start_date, target_end_date, created_at
+       FROM projects WHERE project_id = $1`,
       [projectId],
     );
     if (pr.rows.length === 0) return null;
@@ -155,20 +214,26 @@ export const ProjectService = {
           tasks.rows.some((t) => t.stage_id === st.stage_id && t.assigned_user_id === auth.userId)),
     );
 
+    const row = pr.rows[0];
     return {
-      projectId: pr.rows[0].project_id,
-      orgId: pr.rows[0].org_id,
-      title: pr.rows[0].title,
-      description: pr.rows[0].description ?? '',
-      status: pr.rows[0].status,
-      createdAt: pr.rows[0].created_at ? new Date(pr.rows[0].created_at).toISOString() : null,
+      projectId: row.project_id,
+      orgId: row.org_id,
+      title: row.title,
+      description: row.description ?? '',
+      status: row.status,
+      managerUserId: row.manager_user_id ?? null,
+      leadBrief: row.lead_brief ?? '',
+      workflowStatuses: resolveStatuses(row.workflow_statuses, orgRow.rows[0]?.default_workflow_statuses),
+      startDate: row.start_date ? new Date(row.start_date).toISOString().slice(0, 10) : null,
+      targetEndDate: row.target_end_date ? new Date(row.target_end_date).toISOString().slice(0, 10) : null,
+      createdAt: row.created_at ? new Date(row.created_at).toISOString() : null,
       collaborators: collabRes.rows,
       stages: visibleStages.map((st) => ({
         stageId: st.stage_id,
         name: st.name,
         orderIndex: st.order_index,
         status: st.status,
-        deadline: st.deadline ? new Date(st.deadline).toISOString() : null,
+        deadline: st.deadline ? new Date(st.deadline).toISOString().slice(0, 10) : null,
         tasks: tasks.rows
           .filter((t) => t.stage_id === st.stage_id)
           .map((t) => ({
@@ -191,36 +256,134 @@ export const ProjectService = {
     };
   },
 
-  async createProject(auth: AuthContext, title: string, description?: string, template?: string) {
+  async createProject(
+    auth: AuthContext,
+    title: string,
+    description?: string,
+    options?: {
+      managerUserId?: string;
+      leadBrief?: string;
+      startDate?: string;
+      targetEndDate?: string;
+      stages?: Array<{ name: string; deadline?: string }>;
+      workflowStatuses?: WorkflowStatusDef[];
+    },
+  ) {
     const roleCtx = await this.getOrgMemberRoleContext(auth.activeOrgId, auth.shardId, auth.userId);
     if (!hasPermission(roleCtx, PERMISSION_FLAGS.PROJECT_CREATE)) {
       throw new AppError(403, 'Forbidden: requires project.create');
     }
 
     const pool = dataRouter.postgres.getPrimaryPool(auth.shardId);
+    const orgRow = await pool.query(`SELECT default_workflow_statuses FROM organizations WHERE org_id = $1`, [
+      auth.activeOrgId,
+    ]);
+    const initialStatuses = resolveStatuses(options?.workflowStatuses, orgRow.rows[0]?.default_workflow_statuses);
     const projectId = generatePrefixedId('PRJ');
+
     await pool.query(
-      `INSERT INTO projects (project_id, org_id, title, description, status, created_by)
-       VALUES ($1, $2, $3, $4, 'ACTIVE', $5)`,
-      [projectId, auth.activeOrgId, title, description ?? null, auth.userId],
+      `INSERT INTO projects (project_id, org_id, title, description, status, manager_user_id, lead_brief, workflow_statuses, start_date, target_end_date, created_by)
+       VALUES ($1, $2, $3, $4, 'ACTIVE', $5, $6, $7::jsonb, $8, $9, $10)`,
+      [
+        projectId,
+        auth.activeOrgId,
+        title,
+        description ?? null,
+        options?.managerUserId || auth.userId,
+        options?.leadBrief ?? null,
+        JSON.stringify(initialStatuses),
+        options?.startDate || null,
+        options?.targetEndDate || null,
+        auth.userId,
+      ],
     );
 
-    const stageNames = STAGE_TEMPLATES[template || 'standard'] || STAGE_TEMPLATES.standard;
     const createdStages: Array<{ stageId: string; name: string; orderIndex: number; status: string; tasks: unknown[] }> = [];
-    for (let i = 0; i < stageNames.length; i++) {
+    const customStages = options?.stages ?? [];
+    for (let i = 0; i < customStages.length; i++) {
+      const s = customStages[i];
+      if (!s.name?.trim()) continue;
       const stageId = generatePrefixedId('STG');
       await pool.query(
-        `INSERT INTO stages (stage_id, project_id, org_id, name, order_index) VALUES ($1, $2, $3, $4, $5)`,
-        [stageId, projectId, auth.activeOrgId, stageNames[i], i + 1],
+        `INSERT INTO stages (stage_id, project_id, org_id, name, order_index, deadline) VALUES ($1, $2, $3, $4, $5, $6)`,
+        [stageId, projectId, auth.activeOrgId, s.name.trim(), i + 1, s.deadline || null],
       );
-      createdStages.push({ stageId, name: stageNames[i], orderIndex: i + 1, status: 'PENDING', tasks: [] });
+      createdStages.push({ stageId, name: s.name.trim(), orderIndex: i + 1, status: 'PENDING', tasks: [] });
     }
 
     emitProjectEvent(projectId, 'project:updated', { projectId, action: 'CREATED' });
-    return { projectId, orgId: auth.activeOrgId, title, description: description ?? '', status: 'ACTIVE', stages: createdStages };
+    return {
+      projectId,
+      orgId: auth.activeOrgId,
+      title,
+      description: description ?? '',
+      status: 'ACTIVE',
+      managerUserId: options?.managerUserId || auth.userId,
+      leadBrief: options?.leadBrief ?? '',
+      workflowStatuses: initialStatuses,
+      stages: createdStages,
+    };
   },
 
-  async createStage(auth: AuthContext, projectId: string, name: string, orderIndex: number) {
+  async updateProject(
+    auth: AuthContext,
+    projectId: string,
+    updates: {
+      title?: string;
+      description?: string;
+      status?: string;
+      managerUserId?: string;
+      leadBrief?: string;
+      startDate?: string | null;
+      targetEndDate?: string | null;
+      workflowStatuses?: WorkflowStatusDef[];
+    },
+  ) {
+    const { ownerShardId, roleCtx } = await this.resolveAccess(auth.userId, auth.activeOrgId, projectId);
+    if (!hasPermission(roleCtx, PERMISSION_FLAGS.PROJECT_MANAGE) && !hasPermission(roleCtx, PERMISSION_FLAGS.ORG_MANAGE_SETTINGS)) {
+      throw new AppError(403, 'Forbidden: requires project.manage');
+    }
+    const pool = dataRouter.postgres.getPrimaryPool(ownerShardId);
+    const res = await pool.query(
+      `UPDATE projects
+       SET title = COALESCE($1, title),
+           description = COALESCE($2, description),
+           status = COALESCE($3, status),
+           manager_user_id = COALESCE($4, manager_user_id),
+           lead_brief = COALESCE($5, lead_brief),
+           workflow_statuses = COALESCE($6::jsonb, workflow_statuses),
+           start_date = COALESCE($7::date, start_date),
+           target_end_date = COALESCE($8::date, target_end_date),
+           updated_at = NOW()
+       WHERE project_id = $9
+       RETURNING project_id, title, description, status, manager_user_id, lead_brief, workflow_statuses`,
+      [
+        updates.title ?? null,
+        updates.description ?? null,
+        updates.status ?? null,
+        updates.managerUserId ?? null,
+        updates.leadBrief ?? null,
+        updates.workflowStatuses ? JSON.stringify(updates.workflowStatuses) : null,
+        updates.startDate ?? null,
+        updates.targetEndDate ?? null,
+        projectId,
+      ],
+    );
+    if (res.rows.length === 0) throw new AppError(404, 'Project not found');
+    emitProjectEvent(projectId, 'project:updated', { projectId, action: 'UPDATED' });
+    return res.rows[0];
+  },
+
+  async deleteProject(auth: AuthContext, projectId: string) {
+    const { ownerShardId, roleCtx } = await this.resolveAccess(auth.userId, auth.activeOrgId, projectId);
+    if (!hasPermission(roleCtx, PERMISSION_FLAGS.PROJECT_MANAGE)) {
+      throw new AppError(403, 'Forbidden: requires project.manage');
+    }
+    await dataRouter.postgres.getPrimaryPool(ownerShardId).query(`DELETE FROM projects WHERE project_id = $1`, [projectId]);
+    return { deleted: true, projectId };
+  },
+
+  async createStage(auth: AuthContext, projectId: string, name: string, orderIndex: number, deadline?: string) {
     const { ownerOrgId, ownerShardId, roleCtx } = await this.resolveAccess(auth.userId, auth.activeOrgId, projectId);
     if (!hasPermission(roleCtx, PERMISSION_FLAGS.STAGE_MANAGE_ALL)) {
       throw new AppError(403, 'Forbidden: requires stage.manage_all');
@@ -228,15 +391,82 @@ export const ProjectService = {
     const stageId = generatePrefixedId('STG');
     await dataRouter.postgres
       .getPrimaryPool(ownerShardId)
-      .query(`INSERT INTO stages (stage_id, project_id, org_id, name, order_index) VALUES ($1, $2, $3, $4, $5)`, [
+      .query(`INSERT INTO stages (stage_id, project_id, org_id, name, order_index, deadline) VALUES ($1, $2, $3, $4, $5, $6)`, [
         stageId,
         projectId,
         ownerOrgId,
         name,
         orderIndex,
+        deadline || null,
       ]);
     emitProjectEvent(projectId, 'project:updated', { projectId, action: 'STAGE_CREATED', stageId });
-    return { stageId, name, orderIndex, status: 'PENDING', tasks: [] };
+    return { stageId, name, orderIndex, status: 'PENDING', deadline: deadline || null, tasks: [] };
+  },
+
+  async updateStage(
+    auth: AuthContext,
+    projectId: string,
+    stageId: string,
+    updates: { name?: string; status?: string; orderIndex?: number; deadline?: string | null },
+  ) {
+    const { ownerShardId, roleCtx } = await this.resolveAccess(auth.userId, auth.activeOrgId, projectId);
+    if (!hasPermission(roleCtx, PERMISSION_FLAGS.STAGE_MANAGE_ALL, stageId)) {
+      throw new AppError(403, 'Forbidden: requires stage.manage_all');
+    }
+    const res = await dataRouter.postgres.getPrimaryPool(ownerShardId).query(
+      `UPDATE stages
+       SET name = COALESCE($1, name),
+           status = COALESCE($2, status),
+           order_index = COALESCE($3, order_index),
+           deadline = COALESCE($4::timestamptz, deadline)
+       WHERE stage_id = $5 AND project_id = $6
+       RETURNING stage_id, name, order_index, status, deadline`,
+      [updates.name ?? null, updates.status ?? null, updates.orderIndex ?? null, updates.deadline ?? null, stageId, projectId],
+    );
+    if (res.rows.length === 0) throw new AppError(404, 'Stage not found');
+    emitProjectEvent(projectId, 'project:updated', { projectId, action: 'STAGE_UPDATED', stageId });
+    return res.rows[0];
+  },
+
+  async deleteStage(auth: AuthContext, projectId: string, stageId: string) {
+    const { ownerShardId, roleCtx } = await this.resolveAccess(auth.userId, auth.activeOrgId, projectId);
+    if (!hasPermission(roleCtx, PERMISSION_FLAGS.STAGE_MANAGE_ALL)) {
+      throw new AppError(403, 'Forbidden: requires stage.manage_all');
+    }
+    await dataRouter.postgres
+      .getPrimaryPool(ownerShardId)
+      .query(`DELETE FROM stages WHERE stage_id = $1 AND project_id = $2`, [stageId, projectId]);
+    emitProjectEvent(projectId, 'project:updated', { projectId, action: 'STAGE_DELETED', stageId });
+    return { deleted: true, stageId };
+  },
+
+  async applyAiBlueprint(auth: AuthContext, projectId: string, leadBrief: string) {
+    const { ownerOrgId, ownerShardId, roleCtx } = await this.resolveAccess(auth.userId, auth.activeOrgId, projectId);
+    if (!hasPermission(roleCtx, PERMISSION_FLAGS.PROJECT_MANAGE) && !hasPermission(roleCtx, PERMISSION_FLAGS.STAGE_MANAGE_ALL)) {
+      throw new AppError(403, 'Forbidden: requires project.manage or stage.manage_all');
+    }
+    const pool = dataRouter.postgres.getPrimaryPool(ownerShardId);
+    await pool.query(`UPDATE projects SET lead_brief = $1, updated_at = NOW() WHERE project_id = $2`, [
+      leadBrief,
+      projectId,
+    ]);
+
+    const plan = await this.generateAiPlan(auth, leadBrief, 'field_operations');
+    const existingCountRes = await pool.query(`SELECT COUNT(*)::int AS cnt FROM stages WHERE project_id = $1`, [projectId]);
+    let idxOffset = Number(existingCountRes.rows[0]?.cnt ?? 0);
+
+    const createdStages: Array<{ stageId: string; name: string }> = [];
+    for (const s of plan.stages) {
+      idxOffset += 1;
+      const stageId = generatePrefixedId('STG');
+      await pool.query(
+        `INSERT INTO stages (stage_id, project_id, org_id, name, order_index) VALUES ($1, $2, $3, $4, $5)`,
+        [stageId, projectId, ownerOrgId, s.name, idxOffset],
+      );
+      createdStages.push({ stageId, name: s.name });
+    }
+    emitProjectEvent(projectId, 'project:updated', { projectId, action: 'BLUEPRINT_APPLIED' });
+    return { leadBrief, plan, createdStages };
   },
 
   async listTasks(auth: AuthContext, filters: { projectId?: string; assignedToMe?: boolean }) {
@@ -417,7 +647,9 @@ export const ProjectService = {
     );
     const pool = dataRouter.postgres.getPrimaryPool(ownerShardId);
     const taskRes = await pool.query(
-      `SELECT task_id, stage_id, status, assigned_user_id, checklist FROM tasks WHERE task_id = $1 AND project_id = $2`,
+      `SELECT t.task_id, t.stage_id, t.status, t.assigned_user_id, t.checklist, t.file_requirements, p.workflow_statuses
+       FROM tasks t JOIN projects p ON p.project_id = t.project_id
+       WHERE t.task_id = $1 AND t.project_id = $2`,
       [args.taskId, args.projectId],
     );
     if (taskRes.rows.length === 0) {
@@ -427,6 +659,11 @@ export const ProjectService = {
     const task = taskRes.rows[0];
     const targetStatus = args.toStatus.toUpperCase();
     const isAssignee = task.assigned_user_id === auth.userId;
+    const statuses = resolveStatuses(task.workflow_statuses);
+    const targetDef = statuses.find((s) => s.key.toUpperCase() === targetStatus);
+    const isDoneCategory =
+      targetDef?.category === 'DONE' ||
+      ['DONE', 'COMPLETED', 'SUBMITTED', 'VERIFIED'].includes(targetStatus);
 
     if (roleCtx.isExternalCollaborator && !canAccessStage(roleCtx, task.stage_id)) {
       throw new AppError(403, 'Forbidden: stage is not allocated to your partner role');
@@ -435,12 +672,27 @@ export const ProjectService = {
       throw new AppError(403, 'Forbidden: stage is not allocated to your role');
     }
 
-    // Strict validation: cannot complete task if checklist items are incomplete
-    if (targetStatus === 'COMPLETED' || targetStatus === 'SUBMITTED' || targetStatus === 'VERIFIED') {
+    // Strict validation: cannot move to DONE/COMPLETED/SUBMITTED/VERIFIED if required checklist or file slots are incomplete
+    if (isDoneCategory) {
       const checklistItems = Array.isArray(task.checklist) ? task.checklist : [];
-      const unverified = checklistItems.filter((i: { completed?: boolean; label?: string }) => !i.completed);
+      const unverified = checklistItems.filter((i: { completed?: boolean; required?: boolean; kind?: string; value?: string; fileId?: string }) => {
+        if (i.required === false) return false;
+        if (!i.completed) return true;
+        if ((i.kind === 'TEXT' || i.kind === 'LINK') && !String(i.value || '').trim()) return true;
+        if ((i.kind === 'FILE' || i.kind === 'MEDIA') && !i.fileId) return true;
+        return false;
+      });
       if (unverified.length > 0) {
-        throw new AppError(400, `Cannot mark task ${targetStatus}: ${unverified.length} checklist item(s) must be verified and checked first`);
+        throw new AppError(400, `Cannot mark task ${targetStatus}: ${unverified.length} required checklist item(s) need completion/input first`);
+      }
+
+      const slots = Array.isArray(task.file_requirements) ? task.file_requirements : [];
+      const missingSlots = slots.filter(
+        (s: { required?: boolean; uploadedFiles?: unknown[]; fileId?: string }) =>
+          s.required !== false && (!Array.isArray(s.uploadedFiles) || s.uploadedFiles.length === 0) && !s.fileId,
+      );
+      if (missingSlots.length > 0) {
+        throw new AppError(400, `Cannot mark task ${targetStatus}: ${missingSlots.length} required file submission slot(s) are empty`);
       }
     }
 
@@ -456,15 +708,14 @@ export const ProjectService = {
       }
     }
 
-    const isDone = targetStatus === 'COMPLETED' || targetStatus === 'SUBMITTED' || targetStatus === 'VERIFIED';
     const updated = await pool.query(
       `UPDATE tasks
        SET status = $1,
-           completed_at = CASE WHEN $2 THEN COALESCE(completed_at, NOW()) ELSE completed_at END,
+           completed_at = CASE WHEN $2 THEN COALESCE(completed_at, NOW()) ELSE NULL END,
            updated_at = NOW()
        WHERE task_id = $3
        RETURNING task_id, stage_id, title, task_type, status, assigned_user_id, deadline, completed_at, checklist, file_requirements, text_inputs`,
-      [targetStatus, isDone, args.taskId],
+      [targetStatus, isDoneCategory, args.taskId],
     );
 
     await pool.query(
@@ -473,6 +724,7 @@ export const ProjectService = {
       [ownerOrgId, args.projectId, args.taskId, task.status, targetStatus, auth.userId, args.notes ?? null],
     );
 
+    emitProjectEvent(args.projectId, 'task:updated', { taskId: args.taskId, status: targetStatus });
     const row = updated.rows[0];
     return {
       taskId: row.task_id,
@@ -487,6 +739,50 @@ export const ProjectService = {
       fileRequirements: row.file_requirements,
       textInputs: row.text_inputs,
     };
+  },
+
+  async updateTask(
+    auth: AuthContext,
+    projectId: string,
+    taskId: string,
+    updates: {
+      title?: string;
+      description?: string;
+      assignedUserId?: string | null;
+      deadline?: string | null;
+      checklist?: unknown[];
+      fileRequirements?: unknown[];
+    },
+  ) {
+    const { ownerShardId, roleCtx } = await this.resolveAccess(auth.userId, auth.activeOrgId, projectId);
+    if (!hasPermission(roleCtx, PERMISSION_FLAGS.TASK_CREATE_ASSIGN) && !hasPermission(roleCtx, PERMISSION_FLAGS.STAGE_MANAGE_ALL)) {
+      throw new AppError(403, 'Forbidden: requires task.create_assign');
+    }
+    const res = await dataRouter.postgres.getPrimaryPool(ownerShardId).query(
+      `UPDATE tasks
+       SET title = COALESCE($1, title),
+           description = COALESCE($2, description),
+           assigned_user_id = COALESCE($3, assigned_user_id),
+           deadline = COALESCE($4::timestamptz, deadline),
+           checklist = COALESCE($5::jsonb, checklist),
+           file_requirements = COALESCE($6::jsonb, file_requirements),
+           updated_at = NOW()
+       WHERE task_id = $7 AND project_id = $8
+       RETURNING task_id, stage_id, title, description, status, assigned_user_id, deadline, checklist, file_requirements`,
+      [
+        updates.title ?? null,
+        updates.description ?? null,
+        updates.assignedUserId ?? null,
+        updates.deadline ?? null,
+        updates.checklist ? JSON.stringify(updates.checklist) : null,
+        updates.fileRequirements ? JSON.stringify(updates.fileRequirements) : null,
+        taskId,
+        projectId,
+      ],
+    );
+    if (res.rows.length === 0) throw new AppError(404, 'Task not found');
+    emitProjectEvent(projectId, 'task:updated', { taskId, action: 'UPDATED' });
+    return res.rows[0];
   },
 
   async updateTaskChecklist(
@@ -709,10 +1005,10 @@ export const ProjectService = {
     auth: AuthContext,
     projectId: string,
     taskId: string,
-    body: { tags?: string; bucket?: string; textNote?: string },
+    body: { tags?: string; bucket?: string; textNote?: string; slotId?: string; checklistItemId?: string },
     file?: Express.Multer.File,
   ) {
-    const { ownerOrgId } = await this.resolveAccess(auth.userId, auth.activeOrgId, projectId);
+    const { ownerOrgId, ownerShardId } = await this.resolveAccess(auth.userId, auth.activeOrgId, projectId);
     let uploadedFile: Record<string, unknown> | null = null;
 
     if (file) {
@@ -733,6 +1029,49 @@ export const ProjectService = {
         body: form,
       });
       uploadedFile = (await storageResp.json()) as Record<string, unknown>;
+
+      // Bind uploaded file to specific named file slot or checklist item
+      const pool = dataRouter.postgres.getPrimaryPool(ownerShardId);
+      const tRes = await pool.query(`SELECT checklist, file_requirements FROM tasks WHERE task_id = $1`, [taskId]);
+      if (tRes.rows.length > 0 && uploadedFile?.fileId) {
+        let checklist = Array.isArray(tRes.rows[0].checklist) ? tRes.rows[0].checklist : [];
+        let slots = Array.isArray(tRes.rows[0].file_requirements) ? tRes.rows[0].file_requirements : [];
+
+        if (body.slotId) {
+          slots = slots.map((s: Record<string, unknown>) => {
+            if (s.id !== body.slotId) return s;
+            const prev = Array.isArray(s.uploadedFiles) ? s.uploadedFiles : [];
+            return {
+              ...s,
+              uploadedFiles: [
+                ...prev,
+                {
+                  fileId: uploadedFile?.fileId,
+                  fileName: file.originalname,
+                  mimeType: file.mimetype,
+                  uploadedBy: auth.userId,
+                  uploadedAt: new Date().toISOString(),
+                },
+              ],
+            };
+          });
+        }
+
+        if (body.checklistItemId) {
+          checklist = checklist.map((c: Record<string, unknown>) =>
+            c.id === body.checklistItemId
+              ? { ...c, fileId: uploadedFile?.fileId, fileName: file.originalname, completed: true }
+              : c,
+          );
+        }
+
+        await pool.query(`UPDATE tasks SET checklist = $1::jsonb, file_requirements = $2::jsonb, updated_at = NOW() WHERE task_id = $3`, [
+          JSON.stringify(checklist),
+          JSON.stringify(slots),
+          taskId,
+        ]);
+        emitProjectEvent(projectId, 'task:updated', { taskId, action: 'EVIDENCE_UPLOADED' });
+      }
     }
 
     const mqChannel = getGatewayMqChannel();

@@ -18,6 +18,8 @@ import {
 } from 'lucide-react';
 import { NexoraMark } from '@/components/svg/NexoraMark';
 import { WorkspaceAuthProvider, useWorkspaceAuth } from '@/hooks/useWorkspaceAuth';
+import { useAuthStore, WorkflowStatusDef } from '@/stores/useAuthStore';
+import { apiRequest } from '@/services/nexoraClient';
 import { TaskDetailDrawer } from '@/components/drawers/TaskDetailDrawer';
 import { MARLO_EASE } from '@/components/ui/motion';
 
@@ -47,6 +49,7 @@ function WorkspaceShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, activeOrg, userOrgs, switchOrg, logout, isReady, token } = useWorkspaceAuth();
+  const { setContext } = useAuthStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [railMode, setRailMode] = useState(false);
   const [showOrgDropdown, setShowOrgDropdown] = useState(false);
@@ -56,6 +59,17 @@ function WorkspaceShell({ children }: { children: React.ReactNode }) {
       router.push('/login');
     }
   }, [isReady, token, router]);
+
+  React.useEffect(() => {
+    if (!token || !activeOrg) return;
+    apiRequest<{
+      roleName: string;
+      flags: Record<string, boolean>;
+      defaultWorkflowStatuses: WorkflowStatusDef[];
+    }>('/api/v1/org/my-context', {}, token)
+      .then((ctx) => setContext(ctx.roleName, ctx.flags, ctx.defaultWorkflowStatuses))
+      .catch(() => {});
+  }, [token, activeOrg, setContext]);
 
   if (!isReady) {
     return (

@@ -3,6 +3,18 @@ import { AuthedRequest } from '../middlewares/auth';
 import { ProjectService } from '../services/projectService';
 
 export const GatewayController = {
+  getMyContext: async (req: AuthedRequest, res: Response) => {
+    const ctx = await ProjectService.getMyContext(req.auth!);
+    res.json(ctx);
+  },
+  getOrgWorkflowStatuses: async (req: AuthedRequest, res: Response) => {
+    const statuses = await ProjectService.getOrgWorkflowStatuses(req.auth!);
+    res.json({ statuses });
+  },
+  updateOrgWorkflowStatuses: async (req: AuthedRequest, res: Response) => {
+    const statuses = await ProjectService.updateOrgWorkflowStatuses(req.auth!, req.body.statuses);
+    res.json({ statuses });
+  },
   listRoles: async (req: AuthedRequest, res: Response) => {
     const roles = await ProjectService.listRoles(req.auth!);
     res.json({ roles });
@@ -29,13 +41,23 @@ export const GatewayController = {
     res.json({ projects });
   },
   createProject: async (req: AuthedRequest, res: Response) => {
-    const project = await ProjectService.createProject(
-      req.auth!,
-      req.body.title,
-      req.body.description,
-      req.body.template,
-    );
+    const project = await ProjectService.createProject(req.auth!, req.body.title, req.body.description, {
+      managerUserId: req.body.managerUserId,
+      leadBrief: req.body.leadBrief,
+      startDate: req.body.startDate,
+      targetEndDate: req.body.targetEndDate,
+      stages: req.body.stages,
+      workflowStatuses: req.body.workflowStatuses,
+    });
     res.status(201).json({ project });
+  },
+  updateProject: async (req: AuthedRequest, res: Response) => {
+    const project = await ProjectService.updateProject(req.auth!, String(req.params.projectId), req.body);
+    res.json({ project });
+  },
+  deleteProject: async (req: AuthedRequest, res: Response) => {
+    const result = await ProjectService.deleteProject(req.auth!, String(req.params.projectId));
+    res.json(result);
   },
   getProject: async (req: AuthedRequest, res: Response) => {
     const project = await ProjectService.getProjectTree(req.auth!, String(req.params.projectId));
@@ -51,8 +73,43 @@ export const GatewayController = {
       String(req.params.projectId),
       req.body.name,
       Number(req.body.orderIndex ?? 1),
+      req.body.deadline,
     );
     res.status(201).json({ stage });
+  },
+  updateStage: async (req: AuthedRequest, res: Response) => {
+    const stage = await ProjectService.updateStage(
+      req.auth!,
+      String(req.params.projectId),
+      String(req.params.stageId),
+      req.body,
+    );
+    res.json({ stage });
+  },
+  deleteStage: async (req: AuthedRequest, res: Response) => {
+    const result = await ProjectService.deleteStage(
+      req.auth!,
+      String(req.params.projectId),
+      String(req.params.stageId),
+    );
+    res.json(result);
+  },
+  applyAiBlueprint: async (req: AuthedRequest, res: Response) => {
+    const result = await ProjectService.applyAiBlueprint(
+      req.auth!,
+      String(req.params.projectId),
+      req.body.leadBrief,
+    );
+    res.json(result);
+  },
+  updateTask: async (req: AuthedRequest, res: Response) => {
+    const task = await ProjectService.updateTask(
+      req.auth!,
+      String(req.params.projectId),
+      String(req.params.taskId),
+      req.body,
+    );
+    res.json({ task });
   },
   invitePartner: async (req: AuthedRequest, res: Response) => {
     const ok = await ProjectService.invitePartnerOrg(req.auth!, {

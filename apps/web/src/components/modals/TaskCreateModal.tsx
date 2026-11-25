@@ -2,10 +2,28 @@
 
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, CheckSquare, Plus, Trash2, AlertCircle } from 'lucide-react';
+import { X, CheckSquare, Plus, Trash2, AlertCircle, UploadCloud } from 'lucide-react';
 import { apiRequest } from '@/services/nexoraClient';
 import { useWorkspaceAuth } from '@/hooks/useWorkspaceAuth';
 import { MARLO_EASE } from '@/components/ui/motion';
+
+type ChecklistKind = 'CHECK' | 'TEXT' | 'FILE' | 'MEDIA' | 'LINK';
+
+interface ChecklistDraft {
+  id: string;
+  label: string;
+  kind: ChecklistKind;
+  required: boolean;
+  completed: boolean;
+}
+
+interface FileSlotDraft {
+  id: string;
+  header: string;
+  acceptedType: 'IMAGE' | 'VIDEO' | 'AUDIO' | 'DOCUMENT' | 'ANY';
+  required: boolean;
+  uploadedFiles: unknown[];
+}
 
 interface StageOption {
   stageId: string;
@@ -43,12 +61,17 @@ export function TaskCreateModal({
   const [assignedUserId, setAssignedUserId] = useState('');
   const [deadline, setDeadline] = useState('');
   const [members, setMembers] = useState<MemberOption[]>([]);
-  const [checklistItems, setChecklistItems] = useState<string[]>([
-    'Verify site safety & PPE compliance',
-    'Upload timestamped field evidence',
+
+  const [checklistItems, setChecklistItems] = useState<ChecklistDraft[]>([
+    { id: `chk-1`, label: 'Site safety & PPE verified', kind: 'CHECK', required: true, completed: false },
   ]);
-  const [newCheck, setNewCheck] = useState('');
-  const [reqTypes, setReqTypes] = useState<string[]>(['IMAGE']);
+  const [newCheckLabel, setNewCheckLabel] = useState('');
+  const [newCheckKind, setNewCheckKind] = useState<ChecklistKind>('CHECK');
+
+  const [fileSlots, setFileSlots] = useState<FileSlotDraft[]>([]);
+  const [newSlotHeader, setNewSlotHeader] = useState('');
+  const [newSlotType, setNewSlotType] = useState<'IMAGE' | 'VIDEO' | 'AUDIO' | 'DOCUMENT' | 'ANY'>('IMAGE');
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -67,13 +90,33 @@ export function TaskCreateModal({
   if (!isOpen) return null;
 
   function addChecklistLine() {
-    if (!newCheck.trim()) return;
-    setChecklistItems([...checklistItems, newCheck.trim()]);
-    setNewCheck('');
+    if (!newCheckLabel.trim()) return;
+    setChecklistItems([
+      ...checklistItems,
+      {
+        id: `chk-${Date.now()}`,
+        label: newCheckLabel.trim(),
+        kind: newCheckKind,
+        required: true,
+        completed: false,
+      },
+    ]);
+    setNewCheckLabel('');
   }
 
-  function toggleReqType(type: string) {
-    setReqTypes((prev) => (prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]));
+  function addFileSlot() {
+    if (!newSlotHeader.trim()) return;
+    setFileSlots([
+      ...fileSlots,
+      {
+        id: `slot-${Date.now()}`,
+        header: newSlotHeader.trim(),
+        acceptedType: newSlotType,
+        required: true,
+        uploadedFiles: [],
+      },
+    ]);
+    setNewSlotHeader('');
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -99,18 +142,8 @@ export function TaskCreateModal({
             taskType,
             assignedUserId: assignedUserId || undefined,
             deadline: deadline || undefined,
-            checklist: checklistItems.map((label, i) => ({
-              id: `chk-${Date.now()}-${i}`,
-              label,
-              completed: false,
-              required: true,
-            })),
-            fileRequirements: reqTypes.map((ft, i) => ({
-              id: `fr-${i}`,
-              label: `${ft} Evidence`,
-              fileType: ft,
-              required: true,
-            })),
+            checklist: checklistItems,
+            fileRequirements: fileSlots,
           }),
         },
         token
@@ -131,19 +164,16 @@ export function TaskCreateModal({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.96, y: 12 }}
           transition={{ duration: 0.28, ease: MARLO_EASE }}
-          className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-[26px] border border-white/[0.08] bg-[#141417] p-6 shadow-2xl"
+          className="relative w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-[26px] border border-white/[0.08] bg-[#141417] p-6 shadow-2xl"
         >
           <div className="flex items-center justify-between border-b border-white/[0.06] pb-4 mb-5">
             <div className="flex items-center gap-2.5">
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-500/15 border border-orange-500/25 text-orange-400">
                 <CheckSquare size={16} />
               </div>
-              <h3 className="font-display text-base font-bold text-white">Create Field Task & Checklist</h3>
+              <h3 className="font-display text-base font-bold text-white">Create Task, Typed Checklists & Proof Slots</h3>
             </div>
-            <button
-              onClick={onClose}
-              className="rounded-xl p-1.5 text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
-            >
+            <button onClick={onClose} className="rounded-xl p-1.5 text-zinc-400 hover:text-white cursor-pointer">
               <X size={16} />
             </button>
           </div>
@@ -157,117 +187,93 @@ export function TaskCreateModal({
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-medium text-zinc-300 mb-1.5">Task Title</label>
+              <label className="block text-xs font-medium text-zinc-300 mb-1.5">Task Title *</label>
               <input
                 type="text"
                 required
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="Grounding resistance measurement under 5 ohms"
+                placeholder="Grounding resistance measurement & visual inspection"
                 className="w-full rounded-xl border border-white/[0.08] bg-[#18181c] px-3.5 py-2.5 text-xs text-zinc-100 placeholder-zinc-500 outline-none focus:border-orange-500/60"
               />
             </div>
 
             {stages.length > 0 && (
               <div>
-                <label className="block text-xs font-medium text-zinc-300 mb-1.5">Milestone Stage</label>
+                <label className="block text-xs font-medium text-zinc-300 mb-1.5">Milestone Stage *</label>
                 <select
                   value={stageId}
                   onChange={(e) => setStageId(e.target.value)}
                   className="w-full rounded-xl border border-white/[0.08] bg-[#18181c] px-3 py-2.5 text-xs text-zinc-100 outline-none focus:border-orange-500/60 cursor-pointer"
                 >
                   {stages.map((s) => (
-                    <option key={s.stageId} value={s.stageId}>
-                      {s.name}
-                    </option>
+                    <option key={s.stageId} value={s.stageId}>{s.name}</option>
                   ))}
                 </select>
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <div>
-                <label className="block text-xs font-medium text-zinc-300 mb-1.5">Task Type</label>
+                <label className="block text-xs font-medium text-zinc-300 mb-1.5">Category</label>
                 <select
                   value={taskType}
                   onChange={(e) => setTaskType(e.target.value)}
-                  className="w-full rounded-xl border border-white/[0.08] bg-[#18181c] px-3 py-2.5 text-xs text-zinc-100 outline-none focus:border-orange-500/60 cursor-pointer"
+                  className="w-full rounded-xl border border-white/[0.08] bg-[#18181c] px-3 py-2 text-xs text-zinc-100 outline-none"
                 >
-                  <option value="ON_FIELD">On-Field Execution</option>
-                  <option value="TRANSIT">Transit & Dispatch</option>
+                  <option value="ON_FIELD">On-Field</option>
+                  <option value="TRANSIT">Transit</option>
                   <option value="INSPECTION">Inspection</option>
                   <option value="HANDOVER">Handover</option>
                 </select>
               </div>
-
               <div>
-                <label className="block text-xs font-medium text-zinc-300 mb-1.5">Target Deadline</label>
+                <label className="block text-xs font-medium text-zinc-300 mb-1.5">Assignee</label>
+                <select
+                  value={assignedUserId}
+                  onChange={(e) => setAssignedUserId(e.target.value)}
+                  className="w-full rounded-xl border border-white/[0.08] bg-[#18181c] px-3 py-2 text-xs text-zinc-100 outline-none"
+                >
+                  <option value="">Unassigned</option>
+                  {members.map((m) => (
+                    <option key={m.userId} value={m.userId}>{m.fullName || m.email}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-zinc-300 mb-1.5">Deadline</label>
                 <input
                   type="date"
                   value={deadline}
                   onChange={(e) => setDeadline(e.target.value)}
-                  className="w-full rounded-xl border border-white/[0.08] bg-[#18181c] px-3 py-2.5 text-xs text-zinc-100 outline-none focus:border-orange-500/60"
+                  className="w-full rounded-xl border border-white/[0.08] bg-[#18181c] px-3 py-2 text-xs text-zinc-100 outline-none"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-zinc-300 mb-1.5">Assign Team Member</label>
-              <select
-                value={assignedUserId}
-                onChange={(e) => setAssignedUserId(e.target.value)}
-                className="w-full rounded-xl border border-white/[0.08] bg-[#18181c] px-3 py-2.5 text-xs text-zinc-100 outline-none focus:border-orange-500/60 cursor-pointer"
-              >
-                <option value="">Unassigned (Team Pool)</option>
-                {members.map((m) => (
-                  <option key={m.userId} value={m.userId}>
-                    {m.fullName || m.email} ({m.userId})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-zinc-300 mb-1.5">Description</label>
+              <label className="block text-xs font-medium text-zinc-300 mb-1.5">Instructions</label>
               <textarea
                 rows={2}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Instructions for the field engineer..."
+                placeholder="Execution notes for the assigned user..."
                 className="w-full rounded-xl border border-white/[0.08] bg-[#18181c] px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 outline-none focus:border-orange-500/60"
               />
             </div>
 
-            {/* Required Evidence Types */}
-            <div>
-              <label className="block text-xs font-medium text-zinc-300 mb-1.5">Required Proof Inputs</label>
-              <div className="flex flex-wrap gap-2">
-                {['IMAGE', 'VIDEO', 'AUDIO', 'TEXT'].map((ft) => (
-                  <button
-                    key={ft}
-                    type="button"
-                    onClick={() => toggleReqType(ft)}
-                    className={`rounded-full px-3 py-1 text-[11px] font-mono border transition-colors cursor-pointer ${
-                      reqTypes.includes(ft)
-                        ? 'border-orange-500 bg-orange-500/15 text-orange-300 font-semibold'
-                        : 'border-white/[0.08] bg-[#18181c] text-zinc-400'
-                    }`}
-                  >
-                    {ft}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Checklist Builder */}
+            {/* Typed Checklist Builder */}
             <div className="rounded-2xl border border-white/[0.06] bg-[#18181c] p-3.5 space-y-2.5">
               <label className="block text-xs font-semibold text-zinc-200">
-                Mandatory Pre-Completion Checklist ({checklistItems.length})
+                Typed Checklist Items ({checklistItems.length})
               </label>
               <div className="space-y-1.5 max-h-32 overflow-y-auto">
                 {checklistItems.map((item, idx) => (
-                  <div key={idx} className="flex items-center justify-between gap-2 rounded-xl bg-[#121215] px-3 py-1.5 text-xs text-zinc-300">
-                    <span className="truncate">{item}</span>
+                  <div key={item.id} className="flex items-center justify-between gap-2 rounded-xl bg-[#121215] px-3 py-1.5 text-xs">
+                    <span className="rounded bg-orange-500/15 px-1.5 py-0.5 font-mono text-[10px] text-orange-300">
+                      {item.kind}
+                    </span>
+                    <span className="flex-1 text-zinc-200 truncate">{item.label}</span>
                     <button
                       type="button"
                       onClick={() => setChecklistItems(checklistItems.filter((_, i) => i !== idx))}
@@ -278,20 +284,25 @@ export function TaskCreateModal({
                   </div>
                 ))}
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <input
                   type="text"
-                  value={newCheck}
-                  onChange={(e) => setNewCheck(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      addChecklistLine();
-                    }
-                  }}
-                  placeholder="Add checklist requirement..."
-                  className="flex-1 rounded-xl border border-white/[0.08] bg-[#121215] px-3 py-1.5 text-xs text-white placeholder-zinc-500 outline-none focus:border-orange-500"
+                  value={newCheckLabel}
+                  onChange={(e) => setNewCheckLabel(e.target.value)}
+                  placeholder="Checklist step..."
+                  className="flex-1 min-w-[160px] rounded-xl border border-white/[0.08] bg-[#121215] px-3 py-1.5 text-xs text-white placeholder-zinc-500 outline-none focus:border-orange-500"
                 />
+                <select
+                  value={newCheckKind}
+                  onChange={(e) => setNewCheckKind(e.target.value as ChecklistKind)}
+                  className="rounded-xl border border-white/[0.08] bg-[#121215] px-2.5 py-1.5 font-mono text-[11px] text-orange-300 outline-none"
+                >
+                  <option value="CHECK">Normal Check</option>
+                  <option value="TEXT">Text Input</option>
+                  <option value="FILE">File Upload</option>
+                  <option value="MEDIA">Media (Photo/Vid/Audio)</option>
+                  <option value="LINK">Link / URL</option>
+                </select>
                 <button
                   type="button"
                   onClick={addChecklistLine}
@@ -302,20 +313,70 @@ export function TaskCreateModal({
               </div>
             </div>
 
+            {/* Multi-Slot Named File Submissions Builder */}
+            <div className="rounded-2xl border border-white/[0.06] bg-[#18181c] p-3.5 space-y-2.5">
+              <label className="flex items-center gap-1.5 text-xs font-semibold text-zinc-200">
+                <UploadCloud size={13} className="text-orange-400" />
+                Named File Submission Slots ({fileSlots.length})
+              </label>
+              {fileSlots.length > 0 && (
+                <div className="space-y-1.5 max-h-28 overflow-y-auto">
+                  {fileSlots.map((slot, idx) => (
+                    <div key={slot.id} className="flex items-center justify-between gap-2 rounded-xl bg-[#121215] px-3 py-1.5 text-xs">
+                      <span className="rounded bg-sky-500/15 px-1.5 py-0.5 font-mono text-[10px] text-sky-300">
+                        {slot.acceptedType}
+                      </span>
+                      <span className="flex-1 text-zinc-200 truncate">{slot.header}</span>
+                      <button
+                        type="button"
+                        onClick={() => setFileSlots(fileSlots.filter((_, i) => i !== idx))}
+                        className="text-zinc-500 hover:text-red-400 cursor-pointer"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="flex flex-wrap gap-2">
+                <input
+                  type="text"
+                  value={newSlotHeader}
+                  onChange={(e) => setNewSlotHeader(e.target.value)}
+                  placeholder="Custom submission header (e.g. Before Site Photo)..."
+                  className="flex-1 min-w-[160px] rounded-xl border border-white/[0.08] bg-[#121215] px-3 py-1.5 text-xs text-white placeholder-zinc-500 outline-none focus:border-orange-500"
+                />
+                <select
+                  value={newSlotType}
+                  onChange={(e) => setNewSlotType(e.target.value as FileSlotDraft['acceptedType'])}
+                  className="rounded-xl border border-white/[0.08] bg-[#121215] px-2.5 py-1.5 font-mono text-[11px] text-sky-300 outline-none"
+                >
+                  <option value="IMAGE">Image</option>
+                  <option value="VIDEO">Video</option>
+                  <option value="AUDIO">Voice / Audio</option>
+                  <option value="DOCUMENT">Document / PDF</option>
+                  <option value="ANY">Any File</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={addFileSlot}
+                  className="flex items-center gap-1 rounded-xl bg-white/[0.08] hover:bg-white/[0.15] px-3 py-1.5 text-xs font-semibold text-white cursor-pointer"
+                >
+                  <Plus size={12} /> Add Slot
+                </button>
+              </div>
+            </div>
+
             <div className="flex justify-end gap-2.5 pt-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-xl border border-white/[0.08] px-4 py-2 text-xs font-medium text-zinc-300 hover:bg-white/[0.04] cursor-pointer"
-              >
+              <button type="button" onClick={onClose} className="rounded-xl border border-white/[0.08] px-4 py-2 text-xs text-zinc-300 cursor-pointer">
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={loading || !title}
-                className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-red-600 via-orange-600 to-orange-500 px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-orange-950/40 hover:brightness-110 active:scale-[0.98] disabled:opacity-50 cursor-pointer"
+                className="rounded-full bg-gradient-to-r from-red-600 via-orange-600 to-orange-500 px-5 py-2 text-xs font-semibold text-white cursor-pointer disabled:opacity-50"
               >
-                {loading ? 'Adding Task…' : 'Create Task'}
+                {loading ? 'Adding…' : 'Create Task'}
               </button>
             </div>
           </form>
