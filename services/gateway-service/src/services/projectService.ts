@@ -1028,7 +1028,13 @@ export const ProjectService = {
         },
         body: form,
       });
-      uploadedFile = (await storageResp.json()) as Record<string, unknown>;
+      uploadedFile = (await storageResp.json().catch(() => ({}))) as Record<string, unknown>;
+      if (!storageResp.ok) {
+        throw new AppError(
+          storageResp.status || 502,
+          String(uploadedFile?.message || uploadedFile?.error || 'Storage upload failed'),
+        );
+      }
 
       // Bind uploaded file to specific named file slot or checklist item
       const pool = dataRouter.postgres.getPrimaryPool(ownerShardId);

@@ -1,9 +1,10 @@
+@import url("https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 
 @theme {
-  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-display: "Outfit", "Plus Jakarta Sans", "SF Pro Rounded", ui-rounded, system-ui, sans-serif;
+  --font-sans: "Plus Jakarta Sans", "Inter", "SF Pro Rounded", ui-rounded, system-ui, sans-serif;
+  --font-mono: "Plus Jakarta Sans", "Inter", ui-rounded, system-ui, sans-serif;
 
   --color-cherry-500: #ff3b30;
   --color-cherry-600: #e02d24;
@@ -15,8 +16,8 @@
 :root,
 html[data-theme="light"] {
   --canvas-base: #eef0f4;
-  --canvas-subtle: rgba(255, 255, 255, 0.88);
-  --canvas-elevated: #f5f6f8;
+  --canvas-subtle: rgba(255, 255, 255, 0.92);
+  --canvas-elevated: #f5f6f9;
   --content-primary: #111318;
   --content-secondary: #4b505b;
   --brand-primary: #ff3b30;
@@ -27,7 +28,7 @@ html[data-theme="light"] {
 
 html[data-theme="dark"] {
   --canvas-base: #09090b;
-  --canvas-subtle: #121215;
+  --canvas-subtle: rgba(20, 20, 24, 0.92);
   --canvas-elevated: #18181b;
   --content-primary: #f4f4f5;
   --content-secondary: #a1a1aa;
@@ -40,14 +41,40 @@ html[data-theme="dark"] {
 body {
   background-color: var(--canvas-base);
   color: var(--content-primary);
+  font-family: var(--font-sans);
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   transition: background-color 0.25s cubic-bezier(0.22, 1, 0.36, 1), color 0.25s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Shared Glass Surfaces for Light & Dark Themes */
+.glass-card {
+  background-color: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(20px) saturate(1.4);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05), 0 14px 30px -18px rgba(15, 23, 42, 0.14);
+}
+
+.glass-subtle {
+  background-color: rgba(244, 245, 248, 0.92);
+  border: 1px solid rgba(15, 23, 42, 0.07);
+}
+
+html[data-theme="dark"] .glass-card {
+  background-color: rgba(20, 20, 24, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 12px 32px -12px rgba(0, 0, 0, 0.55);
+}
+
+html[data-theme="dark"] .glass-subtle {
+  background-color: rgba(28, 28, 34, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.07);
 }
 
 /* Crisp Glassy Light Theme Surface Adaptation */
 html[data-theme="light"] .bg-\[\#09090b\],
 html[data-theme="light"] .bg-\[\#09090b\]\/80 {
-  background-color: #eef0f4 !important;
+  background-color: rgba(238, 240, 244, 0.88) !important;
   color: #111318 !important;
 }
 
@@ -57,9 +84,9 @@ html[data-theme="light"] .bg-\[\#121215\]\/90,
 html[data-theme="light"] .bg-\[\#141417\],
 html[data-theme="light"] .bg-\[\#141417\]\/95,
 html[data-theme="light"] .bg-\[\#141418\] {
-  background-color: rgba(255, 255, 255, 0.88) !important;
+  background-color: rgba(255, 255, 255, 0.92) !important;
   backdrop-filter: blur(20px) saturate(1.4);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 16px 32px -20px rgba(15, 23, 42, 0.14);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05), 0 16px 32px -20px rgba(15, 23, 42, 0.14);
 }
 
 html[data-theme="light"] .bg-\[\#18181c\],
@@ -73,14 +100,15 @@ html[data-theme="light"] .bg-\[\#1e1e24\],
 html[data-theme="light"] .bg-\[\#151212\],
 html[data-theme="light"] .bg-\[\#151214\],
 html[data-theme="light"] .bg-\[\#151314\] {
-  background-color: #f4f5f8 !important;
+  background-color: #f3f5f8 !important;
+  color: #111318 !important;
 }
 
 html[data-theme="light"] .bg-\[\#242429\],
 html[data-theme="light"] .bg-\[\#24242b\],
 html[data-theme="light"] .bg-zinc-800 {
-  background-color: #e6e8ee !important;
-  color: #27272a !important;
+  background-color: #e4e7ee !important;
+  color: #1f2937 !important;
 }
 
 html[data-theme="light"] .text-white,
@@ -89,47 +117,57 @@ html[data-theme="light"] .text-zinc-200 {
   color: #111318 !important;
 }
 
-/* Preserve white text inside vibrant gradient & dark badge buttons */
-html[data-theme="light"] .bg-gradient-to-r,
-html[data-theme="light"] .bg-gradient-to-r *,
+/* Preserve white text ONLY inside solid dark/vibrant buttons & badges */
+html[data-theme="light"] .bg-gradient-to-r.from-\[\#ff3b30\],
+html[data-theme="light"] .bg-gradient-to-r.from-\[\#ff3b30\] *,
+html[data-theme="light"] .bg-gradient-to-r.from-red-600:not([class*="/"]),
+html[data-theme="light"] .bg-gradient-to-r.from-red-600:not([class*="/"]) *,
 html[data-theme="light"] .bg-zinc-900,
-html[data-theme="light"] .bg-zinc-900 * {
+html[data-theme="light"] .bg-zinc-900 *,
+html[data-theme="light"] .bg-emerald-600,
+html[data-theme="light"] .bg-emerald-600 *,
+html[data-theme="light"] .bg-red-600,
+html[data-theme="light"] .bg-red-600 *,
+html[data-theme="light"] .bg-blue-600,
+html[data-theme="light"] .bg-blue-600 *,
+html[data-theme="light"] .bg-orange-600,
+html[data-theme="light"] .bg-orange-600 * {
   color: #ffffff !important;
 }
 
 html[data-theme="light"] .text-zinc-300 {
-  color: #3f434a !important;
+  color: #333842 !important;
 }
 html[data-theme="light"] .text-zinc-400 {
-  color: #5b606b !important;
+  color: #525866 !important;
 }
 html[data-theme="light"] .text-zinc-500 {
-  color: #6e737e !important;
+  color: #646a78 !important;
 }
 
 html[data-theme="light"] .text-orange-300,
 html[data-theme="light"] .text-orange-400 {
-  color: #ea580c !important;
+  color: #c2410c !important;
 }
 html[data-theme="light"] .text-emerald-300,
 html[data-theme="light"] .text-emerald-400 {
-  color: #059669 !important;
+  color: #047857 !important;
 }
 html[data-theme="light"] .text-sky-300,
 html[data-theme="light"] .text-sky-400 {
-  color: #0284c7 !important;
+  color: #0369a1 !important;
 }
 html[data-theme="light"] .text-rose-300,
 html[data-theme="light"] .text-red-300 {
-  color: #e11d48 !important;
+  color: #be123c !important;
 }
 
 html[data-theme="light"] [class*="border-white/"] {
-  border-color: rgba(15, 23, 42, 0.09) !important;
+  border-color: rgba(15, 23, 42, 0.1) !important;
 }
 
 html[data-theme="light"] [class*="divide-white/"] > :not(:first-child) {
-  border-color: rgba(15, 23, 42, 0.07) !important;
+  border-color: rgba(15, 23, 42, 0.08) !important;
 }
 
 .tabular-nums {

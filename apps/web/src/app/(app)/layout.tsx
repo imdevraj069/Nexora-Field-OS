@@ -109,7 +109,7 @@ function WorkspaceShell({ children }: { children: React.ReactNode }) {
   if (!token) return null;
 
   return (
-    <div className="flex min-h-screen bg-[#09090b] text-zinc-100">
+    <div className="flex min-h-screen overflow-x-hidden bg-[#09090b] text-zinc-100">
       <AnimatePresence>
         {sidebarOpen && (
           <motion.div
@@ -282,64 +282,68 @@ function WorkspaceShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Main Content Canvas */}
-      <div className="flex-1 flex flex-col min-w-0 pb-24 lg:pb-6">
-        <header className="sticky top-0 z-30 flex h-14 items-center justify-between px-4 lg:px-8 pt-2 bg-[#09090b]/80 backdrop-blur-md">
-          <div className="flex items-center gap-3">
+      <div className="flex-1 flex flex-col min-w-0 pb-28 lg:pb-6">
+        <header className="sticky top-0 z-30 flex min-h-14 items-center justify-between px-4 sm:px-6 lg:px-8 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2 bg-[#09090b]/80 backdrop-blur-md">
+          <div className="flex items-center gap-3 min-w-0">
             <button
               onClick={() => setSidebarOpen(true)}
-              className="rounded-xl border border-white/[0.08] bg-[#121215] p-2 text-zinc-400 hover:text-white lg:hidden"
+              className="rounded-xl border border-white/[0.08] bg-[#121215] p-2.5 text-zinc-400 hover:text-white lg:hidden cursor-pointer"
+              aria-label="Open navigation menu"
             >
-              <Menu size={16} />
+              <Menu size={18} />
             </button>
-            <div className="hidden sm:flex items-center gap-2 text-xs font-mono text-zinc-500">
-              <span className="text-zinc-300 font-semibold">{activeOrg?.org_name}</span>
+            <div className="hidden sm:flex items-center gap-2 text-xs font-medium text-zinc-500 truncate">
+              <span className="text-zinc-300 font-semibold truncate">{activeOrg?.org_name}</span>
               <span>/</span>
-              <span className="text-orange-400 capitalize">{pathname.split('/').filter(Boolean)[0] || 'overview'}</span>
+              <span className="text-orange-500 font-semibold capitalize">{pathname.split('/').filter(Boolean)[0] || 'overview'}</span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={toggleTheme}
-              className="flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-[#121215] px-3 py-1.5 text-xs font-medium text-zinc-300 hover:border-orange-500/40 cursor-pointer"
+              className="flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-[#121215] px-3 py-1.5 text-xs font-semibold text-zinc-300 hover:border-orange-500/40 cursor-pointer"
               title="Toggle Light / Dark Theme"
             >
-              {theme === 'light' ? <Moon size={13} className="text-orange-400" /> : <Sun size={13} className="text-orange-400" />}
+              {theme === 'light' ? <Moon size={13} className="text-orange-500" /> : <Sun size={13} className="text-orange-400" />}
               <span className="hidden sm:inline">{theme === 'light' ? 'Dark' : 'Light'}</span>
             </button>
             <Link
               href="/admin"
-              className="rounded-full border border-white/[0.07] bg-[#121215] px-3 py-1.5 text-[11px] font-mono text-zinc-400 hover:text-white transition-colors"
+              className="rounded-full border border-white/[0.07] bg-[#121215] px-3 py-1.5 text-xs font-semibold text-zinc-400 hover:text-white transition-colors"
             >
-              Admin Console
+              Admin
             </Link>
           </div>
         </header>
 
-        <main className="flex-1 w-full max-w-[1560px] mx-auto px-4 sm:px-6 lg:px-8 py-4">{children}</main>
+        <main className="flex-1 w-full max-w-[1560px] mx-auto px-3.5 sm:px-6 lg:px-8 py-4">{children}</main>
       </div>
 
-      {/* Mobile Bottom Tabbar */}
-      <nav className="lg:hidden fixed bottom-3 inset-x-3 z-40 grid grid-cols-5 gap-1 rounded-[24px] border border-white/[0.08] bg-[#141417]/95 p-1.5 shadow-2xl backdrop-blur-xl">
+      {/* Mobile & Tablet PWA Bottom Dock (5 Most-Used Actions) */}
+      <nav
+        aria-label="Primary mobile dock"
+        className="lg:hidden fixed bottom-[max(0.75rem,env(safe-area-inset-bottom))] inset-x-3 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:w-[480px] z-40 grid grid-cols-5 gap-1 rounded-[26px] border border-white/[0.1] bg-[#141417]/95 p-1.5 shadow-2xl backdrop-blur-xl"
+      >
         {MOBILE_TABS.map(({ href, label, Icon }) => {
           const active = href === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(href);
           return (
             <Link
               key={href}
               href={href}
-              className={`relative flex flex-col items-center justify-center py-2 rounded-2xl text-[10px] font-semibold ${
-                active ? 'text-white' : 'text-zinc-400'
+              className={`relative flex flex-col items-center justify-center min-h-[50px] py-1.5 rounded-2xl text-[11px] font-semibold transition-colors ${
+                active ? 'text-white' : 'text-zinc-400 hover:text-zinc-200'
               }`}
             >
               {active && (
                 <motion.div
                   layoutId="marlo-tab-pill"
-                  className="absolute inset-0 rounded-2xl bg-gradient-to-r from-red-600/25 to-orange-500/25 border border-orange-500/35"
+                  className="absolute inset-0 rounded-2xl bg-gradient-to-r from-[#ff3b30] to-[#f97316] shadow-md shadow-orange-500/25"
                   transition={{ type: 'spring', stiffness: 400, damping: 32 }}
                 />
               )}
-              <Icon size={15} className={`relative z-10 ${active ? 'text-orange-400' : ''}`} />
-              <span className="relative z-10 mt-0.5">{label}</span>
+              <Icon size={17} className="relative z-10" />
+              <span className="relative z-10 mt-0.5 leading-none">{label}</span>
             </Link>
           );
         })}

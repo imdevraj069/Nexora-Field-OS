@@ -63,7 +63,7 @@ interface TaskDetailData {
 
 export function TaskDetailDrawer() {
   const { isOpen, taskId, closeTaskDrawer, notifyDataChanged } = useDrawerStore();
-  const { token } = useWorkspaceAuth();
+  const { token, activeOrg } = useWorkspaceAuth();
 
   const [task, setTask] = useState<TaskDetailData | null>(null);
   const [statuses, setStatuses] = useState<WorkflowStatusDef[]>(DEFAULT_STATUSES);
@@ -187,12 +187,15 @@ export function TaskDetailDrawer() {
 
       const resp = await fetch(`/api/v1/projects/${task.projectId}/tasks/${task.taskId}/evidence`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'x-org-id': activeOrg?.org_id || '',
+        },
         body: fd,
       });
       if (!resp.ok) {
         const j = await resp.json().catch(() => ({}));
-        throw new Error(j.error || 'Upload failed');
+        throw new Error(j.message || j.error || 'Upload failed');
       }
       setEvidenceNotice('Uploaded to MinIO & queued for Gemini 2.5 mixed-language analysis.');
       setSelectedFile(null);
@@ -432,6 +435,7 @@ export function TaskDetailDrawer() {
                                     className="hidden"
                                     onChange={(e) => {
                                       const f = e.target.files?.[0];
+                                      e.target.value = '';
                                       if (f) void uploadToEndpoint(f, { checklistItemId: item.id });
                                     }}
                                   />
@@ -492,6 +496,7 @@ export function TaskDetailDrawer() {
                                   className="hidden"
                                   onChange={(e) => {
                                     const f = e.target.files?.[0];
+                                    e.target.value = '';
                                     if (f) void uploadToEndpoint(f, { slotId: slot.id });
                                   }}
                                 />

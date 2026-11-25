@@ -25,66 +25,98 @@ import { useWorkspaceAuth } from '@/hooks/useWorkspaceAuth';
 import { apiRequest } from '@/services/nexoraClient';
 import { VoiceRecorderInput } from '@/components/ui/VoiceRecorderInput';
 
+type ChecklistKind = 'CHECK' | 'TEXT' | 'FILE' | 'MEDIA' | 'LINK';
+
 interface ChecklistItem {
   id: string;
   label: string;
+  kind?: ChecklistKind;
   completed: boolean;
   required?: boolean;
+  value?: string;
+  fileId?: string;
+  fileName?: string;
 }
 
 export default function TaskExecutionView() {
   const params = useParams();
   const searchParams = useSearchParams();
   const taskId = params?.taskId as string;
-  const projectIdFromUrl = searchParams.get('projectId') || 'PRJ-DEFAULT';
+  const projectIdFromUrl = searchParams.get('projectId') || '';
   const { activeOrg, token, user } = useWorkspaceAuth();
 
   const [task, setTask] = useState<any>({
     taskId,
-    title: 'Site Foundation Concrete Pour Audit',
+    projectId: projectIdFromUrl,
+    title: 'Loading task...',
     taskType: 'FIELD_INSPECTION',
-    status: 'ON_FIELD',
-    deadline: '2026-11-26',
-    assignedUserId: user?.fullName || 'devraj',
-    notes: 'Verify 28-day cylinder compressive strength report. Inspect anchor bolts positioning.',
-    checklist: [
-      { id: 'chk-1', label: 'Verify concrete batch mix delivery ticket & slump test', completed: true, required: true },
-      { id: 'chk-2', label: 'Inspect rebar clearance, chair blocks & anchor cage bolts', completed: false, required: true },
-      { id: 'chk-3', label: 'Record high-voltage earthing grid continuity resistance (Ohms)', completed: false, required: true },
-    ],
-    fileRequirements: [
-      { id: 'fr-1', label: 'High-res foundation pour site photo', fileType: 'IMAGE', required: true },
-      { id: 'fr-2', label: 'Field technician voice/video notes explaining test result', fileType: 'AUDIO/VIDEO', required: false },
-    ],
-    textInputs: {
-      siteObservations: 'Concrete slump measured 110mm. Vibrator compacting in progress.',
-    },
+    status: 'OPEN',
+    deadline: '',
+    assignedUserId: user?.fullName || '',
+    notes: '',
+    checklist: [],
+    fileRequirements: [],
   });
 
   const [updating, setUpdating] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [newChecklistText, setNewChecklistText] = useState('');
+  const [newChecklistKind, setNewChecklistKind] = useState<ChecklistKind>('CHECK');
   const [textNote, setTextNote] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadingKey, setUploadingKey] = useState<string | null>(null);
   const [uploadingEvidence, setUploadingEvidence] = useState(false);
   const [evidenceSuccess, setEvidenceSuccess] = useState('');
 
-  // Toggle checklist item
-  async function toggleChecklist(itemIndex: number) {
-    const updated = [...task.checklist];
-    updated[itemIndex].completed = !updated[itemIndex].completed;
-    setTask((prev: any) => ({ ...prev, checklist: updated }));
+  async function loadTask() {
+    if (!token || !taskId) return;
+    try {
+      const res = await apiRequest<{ task: any }>(`/api/v1/tasks/${taskId}`, {}, token);
+      if (res.task) setTask(res.task);
+    } catch (err) {
+      setErrorMsg((err as Error).message || 'Failed to load task');
+    }
+  }
 
-    if (token) {
+  useEffect(() => {
+    void loadTask();
+  }, [token, taskId]);
+
+  const effectiveProjectId = task.projectId || projectIdFromUrl;
+
+  async function saveChecklist(updated: ChecklistItem[]) {
+    setTask((prev: any) => ({ ...prev, checklist: updated }));
+    if (token && effectiveProjectId) {
       await apiRequest(
-        `/api/v1/projects/${projectIdFromUrl}/tasks/${taskId}/checklist`,
+        `/api/v1/projects/${effectiveProjectId}/tasks/${taskId}/checklist`,
         {
           method: 'PATCH',
           body: JSON.stringify({ checklist: updated }),
         },
         token
-      ).catch(() => {});
+      ).catch((err) => setErrorMsg((err as Error).message));
     }
+  }
+
+  // Toggle checklist item
+  async function toggleChecklist(itemIndex: number) {
+    const target = task.checklist[itemIndex];
+    const kind = target.kind || 'CHECK';
+    if (!target.completed) {
+      if ((kind === 'TEXT' || kind === 'LINK') && !String(target.value || '').trim()) {
+        setErrorMsg(`Enter the required ${kind.toLowerCase()} value for "${target.label}" first.`);
+        return;
+      }
+      if ((kind === 'FILE' || kind === 'MEDIA') && !target.fileId) {
+        setErrorMsg(`Upload the required ${kind.toLowerCase()} for "${target.label}" first.`);
+        return;
+      }
+    }
+    setErrorMsg('');
+    const updated = task.checklist.map((c: ChecklistItem, i: number) =>
+      i === itemIndex ? { ...c, completed: !c.completed } : c
+    );
+    await saveChecklist(updated);
   }
 
   // Add new checklist item
@@ -94,29 +126,18 @@ export default function TaskExecutionView() {
     const newItem: ChecklistItem = {
       id: `chk-${Date.now()}`,
       label: newChecklistText.trim(),
+      kind: newChecklistKind,
       completed: false,
       required: true,
     };
     const updated = [...task.checklist, newItem];
-    setTask((prev: any) => ({ ...prev, checklist: updated }));
     setNewChecklistText('');
-
-    if (token) {
-      await apiRequest(
-        `/api/v1/projects/${projectIdFromUrl}/tasks/${taskId}/checklist`,
-        {
-          method: 'PATCH',
-          body: JSON.stringify({ checklist: updated }),
-        },
-        token
-      ).catch(() => {});
-    }
+    await saveChecklist(updated);
   }
 
   // Advance lifecycle state
   async function updateStatus(newStatus: string) {
     setErrorMsg('');
-    // Client-side checklist guard
     if (newStatus === 'COMPLETED' || newStatus === 'SUBMITTED' || newStatus === 'VERIFIED') {
       const pending = task.checklist.filter((i: ChecklistItem) => !i.completed);
       if (pending.length > 0) {
@@ -127,9 +148,9 @@ export default function TaskExecutionView() {
 
     setUpdating(true);
     try {
-      if (token) {
+      if (token && effectiveProjectId) {
         await apiRequest(
-          `/api/v1/projects/${projectIdFromUrl}/tasks/${taskId}/status`,
+          `/api/v1/projects/${effectiveProjectId}/tasks/${taskId}/status`,
           {
             method: 'PATCH',
             body: JSON.stringify({ status: newStatus }),
@@ -145,43 +166,58 @@ export default function TaskExecutionView() {
     }
   }
 
-  // Upload proof of work (Photo, Video, Audio/Voice Note)
-  async function handleUploadEvidence(e: React.FormEvent) {
-    e.preventDefault();
-    if (!selectedFile && !textNote.trim()) {
-      alert('Please select an audio/video/image file or enter a voice transcript / note.');
-      return;
-    }
-
+  async function uploadEvidenceAsset(
+    file: File | null,
+    opts: { slotId?: string; checklistItemId?: string; note?: string } = {}
+  ) {
+    if (!token || !effectiveProjectId) return;
+    const key = opts.slotId || opts.checklistItemId || 'general';
+    setUploadingKey(key);
     setUploadingEvidence(true);
+    setErrorMsg('');
     setEvidenceSuccess('');
     try {
       const formData = new FormData();
-      if (selectedFile) formData.append('file', selectedFile);
-      formData.append('textNote', textNote);
+      if (file) formData.append('file', file);
+      if (opts.note) formData.append('textNote', opts.note);
+      if (opts.slotId) formData.append('slotId', opts.slotId);
+      if (opts.checklistItemId) formData.append('checklistItemId', opts.checklistItemId);
 
       const resp = await fetch(
-        `/api/v1/projects/${projectIdFromUrl}/tasks/${taskId}/evidence`,
+        `/api/v1/projects/${effectiveProjectId}/tasks/${taskId}/evidence`,
         {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${token}`,
+            'x-org-id': activeOrg?.org_id || '',
           },
           body: formData,
         }
       );
       if (!resp.ok) {
         const errJson = await resp.json().catch(() => ({}));
-        throw new Error(errJson.error || 'Failed to upload evidence');
+        throw new Error(errJson.message || errJson.error || 'Failed to upload evidence');
       }
-      setEvidenceSuccess('Evidence recorded! Gemini 2.5 Flash queued for mixed-language audio & visual analysis.');
+      setEvidenceSuccess('Evidence uploaded to MinIO & queued for Gemini 2.5 analysis.');
       setSelectedFile(null);
       setTextNote('');
+      await loadTask();
     } catch (err) {
-      alert((err as Error).message || 'Failed to submit evidence');
+      setErrorMsg((err as Error).message || 'Failed to submit evidence');
     } finally {
+      setUploadingKey(null);
       setUploadingEvidence(false);
     }
+  }
+
+  // Upload proof of work (Photo, Video, Audio/Voice Note)
+  async function handleUploadEvidence(e: React.FormEvent) {
+    e.preventDefault();
+    if (!selectedFile && !textNote.trim()) {
+      setErrorMsg('Please select an audio/video/image file or enter a voice transcript / note.');
+      return;
+    }
+    await uploadEvidenceAsset(selectedFile, { note: textNote });
   }
 
   return (
@@ -247,42 +283,100 @@ export default function TaskExecutionView() {
         </div>
 
         <div className="space-y-2 mb-4">
-          {task.checklist.map((item: ChecklistItem, idx: number) => (
-            <label
-              key={item.id}
-              className={`flex items-center gap-3 p-3 rounded-xl border transition-colors cursor-pointer select-none ${
-                item.completed
-                  ? 'border-emerald-500/30 bg-emerald-500/5 text-zinc-200'
-                  : 'border-white/[0.06] bg-[#18181b]/40 text-zinc-300 hover:border-white/[0.15]'
-              }`}
-            >
-              <input
-                type="checkbox"
-                checked={item.completed}
-                onChange={() => void toggleChecklist(idx)}
-                className="h-4 w-4 rounded border-zinc-700 bg-zinc-800 text-orange-500 focus:ring-orange-500/30 cursor-pointer"
-              />
-              <span className={`text-xs flex-1 ${item.completed ? 'line-through text-zinc-400' : ''}`}>
-                {item.label}
-              </span>
-              {item.required && (
-                <span className="font-mono text-[9px] uppercase px-1.5 py-0.5 rounded bg-zinc-800 text-amber-400/90 border border-amber-500/20">
-                  Required
-                </span>
-              )}
-            </label>
-          ))}
+          {task.checklist.map((item: ChecklistItem, idx: number) => {
+            const kind = item.kind || 'CHECK';
+            return (
+              <div
+                key={item.id}
+                className={`p-3 rounded-xl border transition-colors space-y-2 ${
+                  item.completed
+                    ? 'border-emerald-500/30 bg-emerald-500/5 text-zinc-200'
+                    : 'border-white/[0.06] bg-[#18181b]/40 text-zinc-300'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={item.completed}
+                    onChange={() => void toggleChecklist(idx)}
+                    className="h-4 w-4 rounded border-zinc-700 bg-zinc-800 text-orange-500 focus:ring-orange-500/30 cursor-pointer"
+                  />
+                  <span className="rounded bg-orange-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-orange-400">
+                    {kind}
+                  </span>
+                  <span className={`text-xs flex-1 ${item.completed ? 'line-through text-zinc-400' : ''}`}>
+                    {item.label}
+                  </span>
+                  {item.required && (
+                    <span className="text-[10px] uppercase px-1.5 py-0.5 rounded bg-zinc-800 text-amber-400/90 border border-amber-500/20">
+                      Required
+                    </span>
+                  )}
+                </div>
+
+                {(kind === 'TEXT' || kind === 'LINK') && (
+                  <div className="pl-7">
+                    <input
+                      type={kind === 'LINK' ? 'url' : 'text'}
+                      value={item.value || ''}
+                      onChange={(e) => {
+                        const updated = task.checklist.map((c: ChecklistItem, i: number) =>
+                          i === idx ? { ...c, value: e.target.value } : c
+                        );
+                        setTask((prev: any) => ({ ...prev, checklist: updated }));
+                      }}
+                      onBlur={() => void saveChecklist(task.checklist)}
+                      placeholder={kind === 'LINK' ? 'https://...' : 'Enter measurement or note...'}
+                      className="w-full rounded-lg border border-white/[0.08] bg-[#121215] px-2.5 py-1.5 text-xs text-white outline-none focus:border-orange-500"
+                    />
+                  </div>
+                )}
+
+                {(kind === 'FILE' || kind === 'MEDIA') && (
+                  <div className="flex items-center justify-between gap-2 pl-7">
+                    <span className="text-[11px] text-zinc-400 truncate">
+                      {item.fileId ? `✓ ${item.fileName || item.fileId}` : `No ${kind.toLowerCase()} uploaded`}
+                    </span>
+                    <label className="rounded-lg bg-orange-500/15 px-3 py-1 text-[11px] font-semibold text-orange-400 hover:bg-orange-500/25 cursor-pointer shrink-0">
+                      {uploadingKey === item.id ? 'Uploading…' : 'Upload File'}
+                      <input
+                        type="file"
+                        accept={kind === 'MEDIA' ? 'image/*,video/*,audio/*' : '*'}
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          e.target.value = '';
+                          if (f) void uploadEvidenceAsset(f, { checklistItemId: item.id });
+                        }}
+                      />
+                    </label>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
 
         {/* Add new checklist item form */}
-        <form onSubmit={addChecklistItem} className="flex gap-2">
+        <form onSubmit={addChecklistItem} className="flex flex-wrap gap-2">
           <input
             type="text"
             value={newChecklistText}
             onChange={(e) => setNewChecklistText(e.target.value)}
             placeholder="Add new required verification item..."
-            className="flex-1 rounded-xl border border-white/[0.08] bg-[#18181b] px-3.5 py-2 text-xs text-white placeholder-zinc-500 focus:border-orange-500 focus:outline-none"
+            className="flex-1 min-w-[160px] rounded-xl border border-white/[0.08] bg-[#18181b] px-3.5 py-2 text-xs text-white placeholder-zinc-500 focus:border-orange-500 focus:outline-none"
           />
+          <select
+            value={newChecklistKind}
+            onChange={(e) => setNewChecklistKind(e.target.value as ChecklistKind)}
+            className="rounded-xl border border-white/[0.08] bg-[#18181b] px-2.5 py-2 text-xs font-semibold text-orange-400 outline-none"
+          >
+            <option value="CHECK">Check</option>
+            <option value="TEXT">Text</option>
+            <option value="FILE">File</option>
+            <option value="MEDIA">Media</option>
+            <option value="LINK">Link</option>
+          </select>
           <button
             type="submit"
             className="flex items-center gap-1 rounded-xl bg-[#27272a] hover:bg-zinc-700 px-3 py-2 text-xs font-semibold text-white transition-colors cursor-pointer"
@@ -291,6 +385,51 @@ export default function TaskExecutionView() {
           </button>
         </form>
       </div>
+
+      {/* Required File Submission Slots */}
+      {task.fileRequirements && task.fileRequirements.length > 0 && (
+        <div className="rounded-2xl border border-white/[0.06] bg-[#121215]/90 p-6 shadow-xl space-y-3">
+          <h2 className="font-display text-sm font-semibold text-white flex items-center gap-2">
+            <UploadCloud size={16} className="text-sky-400" />
+            Required File Submission Slots ({task.fileRequirements.length})
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {task.fileRequirements.map((slot: any) => (
+              <div key={slot.id} className="rounded-xl border border-white/[0.08] bg-[#18181b] p-3.5 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-white truncate">{slot.header || slot.label}</p>
+                    <p className="text-[11px] text-zinc-400">
+                      {slot.acceptedType || slot.fileType || 'ANY'}
+                    </p>
+                  </div>
+                  <label className="rounded-full bg-orange-500/15 px-3 py-1 text-[11px] font-semibold text-orange-400 hover:bg-orange-500/25 cursor-pointer shrink-0">
+                    {uploadingKey === slot.id ? 'Uploading…' : '+ Upload'}
+                    <input
+                      type="file"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        e.target.value = '';
+                        if (f) void uploadEvidenceAsset(f, { slotId: slot.id });
+                      }}
+                    />
+                  </label>
+                </div>
+                {slot.uploadedFiles && slot.uploadedFiles.length > 0 && (
+                  <div className="space-y-1 pt-1 border-t border-white/[0.06]">
+                    {slot.uploadedFiles.map((uf: any) => (
+                      <p key={uf.fileId} className="text-[11px] text-emerald-400 truncate">
+                        ✓ {uf.fileName}
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Mobile-Friendly Tactile Field Control Strip */}
       <div className="rounded-2xl border border-white/[0.06] bg-[#121215]/90 p-6 shadow-xl">
