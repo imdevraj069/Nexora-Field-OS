@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package nexora.storage;
+
+service StorageService {
+  rpc MintSignedClientUrl (MintSignedUrlRequest) returns (MintSignedUrlResponse);
+  rpc ValidateProjectFileOwnership (ValidateFileRequest) returns (ValidateFileResponse);
+}
+
+message MintSignedUrlRequest {
+  string file_id = 1;
+  string org_id = 2;
+  string project_id = 3;
+  string user_id = 4;
+  int32 ttl_seconds = 5;
+}
+
+message MintSignedUrlResponse {
+  string signed_url = 1;
+  int64 expires_at = 2;
+}
+
+message ValidateFileRequest {
+  string file_id = 1;
+  string project_id = 2;
+}
+
+message ValidateFileResponse {
+  bool valid = 1;
+  string bucket = 2;
+  string object_key = 3;
+  string mime_type = 4;
+}

@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+package nexora.ai;
+
+service AiGovernanceService {
+  rpc GenerateProjectBlueprint (ProjectBlueprintRequest) returns (ProjectBlueprintResponse);
+  rpc ComputeStageEfficiency (StageEfficiencyRequest) returns (StageEfficiencyResponse);
+}
+
+message ProjectBlueprintRequest {
+  string org_id = 1;
+  string prompt = 2;
+  string industry_hint = 3;
+}
+
+message GeneratedTask {
+  string title = 1;
+  string description = 2;
+  repeated string checklist_items = 3;
+  int32 estimated_hours = 4;
+}
+
+message GeneratedStage {
+  string name = 1;
+  int32 order_index = 2;
+  repeated GeneratedTask tasks = 3;
+  string recommended_role = 4;
+}
+
+message ProjectBlueprintResponse {
+  string suggested_title = 1;
+  string summary = 2;
+  repeated GeneratedStage stages = 3;
+}
+
+message StageEfficiencyRequest {
+  string org_id = 1;
+  string project_id = 2;
+  string stage_id = 3;
+}
+
+message StageEfficiencyResponse {
+  double efficiency_score = 1;
+  double completion_rate = 2;
+  repeated string risk_flags = 3;
+  string summary = 4;
+}

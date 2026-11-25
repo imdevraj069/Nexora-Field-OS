@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+package nexora.identity;
+
+service IdentityService {
+  rpc VerifyAccessToken (VerifyTokenRequest) returns (VerifyTokenResponse);
+  rpc ResolveOrgShard (ResolveOrgShardRequest) returns (ResolveOrgShardResponse);
+  rpc GetUserProjectAccess (UserProjectAccessRequest) returns (UserProjectAccessResponse);
+}
+
+message VerifyTokenRequest {
+  string token = 1;
+}
+
+message VerifyTokenResponse {
+  bool valid = 1;
+  string user_id = 2;
+  string email = 3;
+  string active_org_id = 4;
+  int32 shard_id = 5;
+  string role_id = 6;
+}
+
+message ResolveOrgShardRequest {
+  string org_id = 1;
+}
+
+message ResolveOrgShardResponse {
+  string org_id = 1;
+  int32 shard_id = 2;
+  bool exists = 3;
+}
+
+message UserProjectAccessRequest {
+  string user_id = 1;
+  string user_org_id = 2;
+  string project_id = 3;
+}
+
+message UserProjectAccessResponse {
+  bool allowed = 1;
+  string owner_org_id = 2;
+  int32 owner_shard_id = 3;
+  string role_name = 4;
+  map<string, bool> flags = 5;
+  repeated string allocated_stage_ids = 6;
+  bool is_external_collaborator = 7;
+}

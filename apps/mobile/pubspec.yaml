@@ -1,0 +1,22 @@
+name: nexora_field_mobile
+description: Nexora Field OS mobile client for field execution, transit GPS pings, and multimodal evidence capture.
+publish_to: none
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  dio: ^5.7.0
+  socket_io_client: ^3.0.2
+  geolocator: ^13.0.2
+  image_picker: ^1.1.2
+  record: ^5.2.0
+  hive_flutter: ^1.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0

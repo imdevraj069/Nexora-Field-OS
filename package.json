@@ -1,0 +1,18 @@
+{
+  "name": "nexora-field-os",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Configurable multi-tenant, AI-governed platform for distributed field operations management",
+  "scripts": {
+    "build": "pnpm -r --filter './packages/*' --filter './services/*' build",
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint",
+    "docker:dev": "docker compose --profile dev up -d --build",
+    "docker:cluster": "docker compose --profile cluster up -d --build",
+    "docker:down": "docker compose --profile dev --profile cluster down"
+  },
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=10.0.0"
+  }
+}

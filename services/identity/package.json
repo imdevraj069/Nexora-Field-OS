@@ -1,0 +1,28 @@
+{
+  "name": "@nexora/identity",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "test": "node --test dist/**/*.test.js",
+    "lint": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@grpc/grpc-js": "^1.12.2",
+    "@grpc/proto-loader": "^0.7.13",
+    "@nexora/proto": "workspace:*",
+    "@nexora/shard-router": "workspace:*",
+    "@nexora/shared-types": "workspace:*",
+    "amqplib": "^0.10.4",
+    "express": "^4.21.1",
+    "jsonwebtoken": "^9.0.2"
+  },
+  "devDependencies": {
+    "@types/amqplib": "^0.10.5",
+    "@types/express": "^5.0.0",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/node": "^22.10.1",
+    "typescript": "^5.7.2"
+  }
+}

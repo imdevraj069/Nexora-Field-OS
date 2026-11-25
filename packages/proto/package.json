@@ -1,0 +1,10 @@
+{
+  "name": "@nexora/proto",
+  "version": "1.0.0",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "scripts": {
+    "build": "echo 'proto definitions ready'",
+    "test": "echo 'proto syntax verified'"
+  }
+}

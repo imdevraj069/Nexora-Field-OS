@@ -1,0 +1,12 @@
+# Cloudflare Tunnel Ingress Configuration (Reference for Dashboard / Token Mode)
+# When using CLOUDFLARE_TUNNEL_TOKEN in Zero Trust Dashboard, configure these
+# exact Public Hostname -> Service mappings pointing to http://nginx:80.
+
+ingress:
+  - hostname: ${PUBLIC_APP_HOST:-app.nexora.example.com}
+    service: http://nginx:80
+  - hostname: ${PUBLIC_API_HOST:-api.nexora.example.com}
+    service: http://nginx:80
+  - hostname: ${PUBLIC_WS_HOST:-ws.nexora.example.com}
+    service: http://nginx:80
+  - service: http_status:404
