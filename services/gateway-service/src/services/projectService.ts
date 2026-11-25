@@ -1,6 +1,7 @@
 import {
   PERMISSION_FLAGS,
   RolePermissionContext,
+  canAccessStage,
   generatePrefixedId,
   hasPermission,
 } from '@nexora/shared-types';
@@ -10,6 +11,33 @@ import { aiClient, grpcCall, identityClient, storageClient } from '../grpc/clien
 import { AppError } from '../utils/http';
 
 export const ProjectService = {
+  async getOrgMemberRoleContext(orgId: string, shardId: 1 | 2 | 3, userId: string): Promise<RolePermissionContext> {
+    const pool = dataRouter.postgres.getReadPool(shardId, true);
+    const res = await pool.query(
+      `SELECT m.allocated_stage_ids, r.name, r.flags
+       FROM org_members m
+       LEFT JOIN org_member_roles omr ON omr.org_id = m.org_id AND omr.user_id = m.user_id
+       JOIN roles r ON r.role_id = COALESCE(omr.role_id, m.role_id)
+       WHERE m.org_id = $1 AND m.user_id = $2 AND m.status = 'ACTIVE'`,
+      [orgId, userId],
+    );
+    if (res.rows.length === 0) {
+      throw new AppError(403, 'User is not an active member of this organization');
+    }
+    const mergedFlags: Record<string, boolean> = {};
+    for (const row of res.rows) {
+      for (const [k, v] of Object.entries((row.flags as Record<string, boolean>) ?? {})) {
+        if (v === true) mergedFlags[k] = true;
+      }
+    }
+    return {
+      roleName: res.rows.map((r) => r.name).join(', '),
+      flags: mergedFlags,
+      allocatedStageIds: res.rows[0].allocated_stage_ids ?? [],
+      isExternalCollaborator: false,
+    };
+  },
+
   async resolveAccess(userId: string, userOrgId: string, projectId: string) {
     const access = await grpcCall(identityClient.GetUserProjectAccess.bind(identityClient), {
       user_id: userId,
@@ -33,7 +61,7 @@ export const ProjectService = {
   },
 
   async listProjects(auth: AuthContext) {
-    const homePool = dataRouter.postgres.getReadPool(auth.shardId);
+    const homePool = dataRouter.postgres.getReadPool(auth.shardId, true);
     const homeProjects = await homePool.query(
       `SELECT project_id, org_id, title, status FROM projects WHERE org_id = $1 ORDER BY created_at DESC`,
       [auth.activeOrgId],
@@ -46,7 +74,7 @@ export const ProjectService = {
 
     const sharedProjects = await Promise.all(
       collabRows.rows.map(async (c) => {
-        const p = dataRouter.postgres.getReadPool(c.owner_shard_id);
+        const p = dataRouter.postgres.getReadPool(c.owner_shard_id, true);
         const r = await p.query(`SELECT project_id, org_id, title, status FROM projects WHERE project_id = $1`, [
           c.project_id,
         ]);
@@ -64,8 +92,8 @@ export const ProjectService = {
   },
 
   async getProjectTree(auth: AuthContext, projectId: string) {
-    const { ownerShardId } = await this.resolveAccess(auth.userId, auth.activeOrgId, projectId);
-    const pool = dataRouter.postgres.getReadPool(ownerShardId);
+    const { ownerShardId, roleCtx } = await this.resolveAccess(auth.userId, auth.activeOrgId, projectId);
+    const pool = dataRouter.postgres.getReadPool(ownerShardId, true);
     const pr = await pool.query(`SELECT project_id, org_id, title, status FROM projects WHERE project_id = $1`, [
       projectId,
     ]);
@@ -76,9 +104,16 @@ export const ProjectService = {
       [projectId],
     );
     const tasks = await pool.query(
-      `SELECT t.task_id, t.stage_id, t.title, t.task_type, t.status, t.assigned_user_id, t.deadline, s.overall_efficiency
+      `SELECT t.task_id, t.stage_id, t.title, t.task_type, t.status, t.assigned_user_id, t.deadline, t.completed_at, s.overall_efficiency
        FROM tasks t LEFT JOIN task_efficiency_scores s ON s.task_id = t.task_id WHERE t.project_id = $1`,
       [projectId],
+    );
+
+    const visibleStages = stages.rows.filter(
+      (st) =>
+        canAccessStage(roleCtx, st.stage_id) ||
+        (!roleCtx.isExternalCollaborator &&
+          tasks.rows.some((t) => t.stage_id === st.stage_id && t.assigned_user_id === auth.userId)),
     );
 
     return {
@@ -86,7 +121,7 @@ export const ProjectService = {
       orgId: pr.rows[0].org_id,
       title: pr.rows[0].title,
       status: pr.rows[0].status,
-      stages: stages.rows.map((st) => ({
+      stages: visibleStages.map((st) => ({
         stageId: st.stage_id,
         name: st.name,
         orderIndex: st.order_index,
@@ -101,6 +136,7 @@ export const ProjectService = {
             status: t.status,
             assignedUserId: t.assigned_user_id,
             deadline: t.deadline ? new Date(t.deadline).toISOString() : null,
+            completedAt: t.completed_at ? new Date(t.completed_at).toISOString() : null,
             efficiencyScore: t.overall_efficiency ? Number(t.overall_efficiency) : null,
           })),
       })),
@@ -108,6 +144,11 @@ export const ProjectService = {
   },
 
   async createProject(auth: AuthContext, title: string, description?: string) {
+    const roleCtx = await this.getOrgMemberRoleContext(auth.activeOrgId, auth.shardId, auth.userId);
+    if (!hasPermission(roleCtx, PERMISSION_FLAGS.PROJECT_CREATE)) {
+      throw new AppError(403, 'Forbidden: requires project.create');
+    }
+
     const pool = dataRouter.postgres.getPrimaryPool(auth.shardId);
     const projectId = generatePrefixedId('PRJ');
     await pool.query(
@@ -148,6 +189,27 @@ export const ProjectService = {
     if (!hasPermission(roleCtx, PERMISSION_FLAGS.TASK_CREATE_ASSIGN, args.stageId)) {
       throw new AppError(403, 'Forbidden: requires task.create_assign');
     }
+
+    if (args.assignedUserId) {
+      const homeCheck = await dataRouter.postgres
+        .getReadPool(ownerShardId, true)
+        .query(`SELECT 1 FROM org_members WHERE org_id = $1 AND user_id = $2 AND status = 'ACTIVE'`, [
+          ownerOrgId,
+          args.assignedUserId,
+        ]);
+      if (homeCheck.rows.length === 0) {
+        const collabCheck = await dataRouter.postgres
+          .getGlobalPool()
+          .query(`SELECT 1 FROM project_collaborators WHERE project_id = $1 AND user_id = $2`, [
+            args.projectId,
+            args.assignedUserId,
+          ]);
+        if (collabCheck.rows.length === 0) {
+          throw new AppError(400, `User ${args.assignedUserId} is not a member or project collaborator`);
+        }
+      }
+    }
+
     const taskId = generatePrefixedId('TSK');
     await dataRouter.postgres.getPrimaryPool(ownerShardId).query(
       `INSERT INTO tasks (task_id, stage_id, project_id, org_id, title, task_type, assigned_user_id, deadline)
@@ -171,12 +233,90 @@ export const ProjectService = {
       status: 'TODO',
       assignedUserId: args.assignedUserId ?? null,
       deadline: args.deadline ?? null,
+      completedAt: null,
+    };
+  },
+
+  async updateTaskStatus(
+    auth: AuthContext,
+    args: { projectId: string; taskId: string; toStatus: string; notes?: string },
+  ) {
+    const { ownerOrgId, ownerShardId, roleCtx } = await this.resolveAccess(
+      auth.userId,
+      auth.activeOrgId,
+      args.projectId,
+    );
+    const pool = dataRouter.postgres.getPrimaryPool(ownerShardId);
+    const taskRes = await pool.query(
+      `SELECT task_id, stage_id, status, assigned_user_id FROM tasks WHERE task_id = $1 AND project_id = $2`,
+      [args.taskId, args.projectId],
+    );
+    if (taskRes.rows.length === 0) {
+      throw new AppError(404, 'Task not found in project');
+    }
+
+    const task = taskRes.rows[0];
+    const targetStatus = args.toStatus.toUpperCase();
+    const isAssignee = task.assigned_user_id === auth.userId;
+
+    if (roleCtx.isExternalCollaborator && !canAccessStage(roleCtx, task.stage_id)) {
+      throw new AppError(403, 'Forbidden: stage is not allocated to your partner role');
+    }
+    if (!roleCtx.isExternalCollaborator && !isAssignee && !canAccessStage(roleCtx, task.stage_id)) {
+      throw new AppError(403, 'Forbidden: stage is not allocated to your role');
+    }
+
+    if (targetStatus === 'VERIFIED' || targetStatus === 'REJECTED') {
+      if (!hasPermission(roleCtx, PERMISSION_FLAGS.TASK_VERIFY_APPROVE)) {
+        throw new AppError(403, 'Forbidden: requires task.verify_approve');
+      }
+    } else {
+      const canManageStage = hasPermission(roleCtx, PERMISSION_FLAGS.STAGE_MANAGE_ALL, task.stage_id);
+      const canExecute = hasPermission(roleCtx, PERMISSION_FLAGS.TASK_EXECUTE_OWN) && isAssignee;
+      if (!canManageStage && !canExecute) {
+        throw new AppError(403, 'Forbidden: only the assigned user or stage manager can update this task');
+      }
+    }
+
+    const isDone = targetStatus === 'COMPLETED' || targetStatus === 'SUBMITTED' || targetStatus === 'VERIFIED';
+    const updated = await pool.query(
+      `UPDATE tasks
+       SET status = $1,
+           completed_at = CASE WHEN $2 THEN COALESCE(completed_at, NOW()) ELSE completed_at END,
+           updated_at = NOW()
+       WHERE task_id = $3
+       RETURNING task_id, stage_id, title, task_type, status, assigned_user_id, deadline, completed_at`,
+      [targetStatus, isDone, args.taskId],
+    );
+
+    await pool.query(
+      `INSERT INTO workflow_transitions (org_id, project_id, entity_type, entity_id, from_status, to_status, actor_user_id, notes)
+       VALUES ($1, $2, 'TASK', $3, $4, $5, $6, $7)`,
+      [ownerOrgId, args.projectId, args.taskId, task.status, targetStatus, auth.userId, args.notes ?? null],
+    );
+
+    const row = updated.rows[0];
+    return {
+      taskId: row.task_id,
+      stageId: row.stage_id,
+      title: row.title,
+      taskType: row.task_type,
+      status: row.status,
+      assignedUserId: row.assigned_user_id,
+      deadline: row.deadline ? new Date(row.deadline).toISOString() : null,
+      completedAt: row.completed_at ? new Date(row.completed_at).toISOString() : null,
     };
   },
 
   async invitePartnerOrg(
     auth: AuthContext,
-    args: { projectId: string; partnerOrgId: string; userId: string; roleName: string; allocatedStageIds: string[] },
+    args: {
+      projectId: string;
+      partnerOrgId: string;
+      userId: string;
+      roleName: string;
+      allocatedStageIds: string[];
+    },
   ) {
     const { ownerOrgId, ownerShardId, roleCtx } = await this.resolveAccess(
       auth.userId,
@@ -227,6 +367,10 @@ export const ProjectService = {
   },
 
   async upsertRole(auth: AuthContext, name: string, flags: Record<string, boolean>) {
+    const roleCtx = await this.getOrgMemberRoleContext(auth.activeOrgId, auth.shardId, auth.userId);
+    if (!hasPermission(roleCtx, PERMISSION_FLAGS.ORG_MANAGE_ROLES)) {
+      throw new AppError(403, 'Forbidden: requires org.manage_roles');
+    }
     const roleId = `ROLE-${auth.activeOrgId}-${name.toUpperCase().replace(/[^A-Z0-9]/g, '_')}`;
     await dataRouter.postgres
       .getPrimaryPool(auth.shardId)
@@ -241,11 +385,88 @@ export const ProjectService = {
 
   async listRoles(auth: AuthContext) {
     const { rows } = await dataRouter.postgres
-      .getReadPool(auth.shardId)
+      .getReadPool(auth.shardId, true)
       .query(`SELECT role_id, name, flags, is_system FROM roles WHERE org_id = $1 ORDER BY is_system DESC, name ASC`, [
         auth.activeOrgId,
       ]);
     return rows;
+  },
+
+  async listOrgMembers(auth: AuthContext) {
+    const shardPool = dataRouter.postgres.getReadPool(auth.shardId, true);
+    const { rows } = await shardPool.query(
+      `SELECT m.user_id, m.status, m.allocated_stage_ids,
+              COALESCE(array_agg(r.role_id) FILTER (WHERE r.role_id IS NOT NULL), '{}') AS role_ids,
+              COALESCE(array_agg(r.name) FILTER (WHERE r.name IS NOT NULL), '{}') AS role_names
+       FROM org_members m
+       LEFT JOIN org_member_roles omr ON omr.org_id = m.org_id AND omr.user_id = m.user_id
+       LEFT JOIN roles r ON r.role_id = COALESCE(omr.role_id, m.role_id)
+       WHERE m.org_id = $1
+       GROUP BY m.user_id, m.status, m.allocated_stage_ids`,
+      [auth.activeOrgId],
+    );
+
+    const userIds = rows.map((r) => r.user_id);
+    if (userIds.length === 0) return [];
+    const userRes = await dataRouter.postgres
+      .getGlobalPool()
+      .query(`SELECT user_id, email, full_name, is_verified FROM users WHERE user_id = ANY($1)`, [userIds]);
+    const userMap = new Map(userRes.rows.map((u) => [u.user_id, u]));
+
+    return rows.map((r) => ({
+      userId: r.user_id,
+      email: userMap.get(r.user_id)?.email ?? null,
+      fullName: userMap.get(r.user_id)?.full_name ?? null,
+      status: r.status,
+      roleIds: r.role_ids,
+      roleNames: r.role_names,
+      allocatedStageIds: r.allocated_stage_ids,
+    }));
+  },
+
+  async assignRolesToMember(
+    auth: AuthContext,
+    targetUserId: string,
+    roleIds: string[],
+    allocatedStageIds?: string[],
+  ) {
+    const roleCtx = await this.getOrgMemberRoleContext(auth.activeOrgId, auth.shardId, auth.userId);
+    if (!hasPermission(roleCtx, PERMISSION_FLAGS.ORG_MANAGE_ROLES)) {
+      throw new AppError(403, 'Forbidden: requires org.manage_roles');
+    }
+    if (!roleIds || roleIds.length === 0) {
+      throw new AppError(400, 'At least one roleId must be provided');
+    }
+
+    const pool = dataRouter.postgres.getPrimaryPool(auth.shardId);
+    const validRoles = await pool.query(
+      `SELECT role_id FROM roles WHERE org_id = $1 AND role_id = ANY($2)`,
+      [auth.activeOrgId, roleIds],
+    );
+    if (validRoles.rows.length !== roleIds.length) {
+      throw new AppError(400, 'One or more roleIds do not belong to this organization');
+    }
+
+    await pool.query(
+      `UPDATE org_members
+       SET role_id = $1,
+           allocated_stage_ids = COALESCE($2::jsonb, allocated_stage_ids)
+       WHERE org_id = $3 AND user_id = $4`,
+      [roleIds[0], allocatedStageIds ? JSON.stringify(allocatedStageIds) : null, auth.activeOrgId, targetUserId],
+    );
+    await pool.query(`DELETE FROM org_member_roles WHERE org_id = $1 AND user_id = $2`, [
+      auth.activeOrgId,
+      targetUserId,
+    ]);
+    for (const rId of roleIds) {
+      await pool.query(
+        `INSERT INTO org_member_roles (org_id, user_id, role_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+        [auth.activeOrgId, targetUserId, rId],
+      );
+    }
+
+    await dataRouter.redis.invalidate(auth.activeOrgId, 'rbac', targetUserId);
+    return { userId: targetUserId, orgId: auth.activeOrgId, roleIds, allocatedStageIds: allocatedStageIds ?? [] };
   },
 
   async submitEvidence(

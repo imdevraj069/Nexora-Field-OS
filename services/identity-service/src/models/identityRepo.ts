@@ -1,5 +1,5 @@
 import { dataRouter } from '../config/env';
-import { ShardId } from '@nexora/shared-types';
+import { ShardId, resolveShardFromOrgId } from '@nexora/shared-types';
 
 export const IdentityRepo = {
   async insertUser(params: {
@@ -48,11 +48,60 @@ export const IdentityRepo = {
       params.userId,
       params.adminRoleId,
     ]);
+    await shardPool.query(`INSERT INTO org_member_roles (org_id, user_id, role_id) VALUES ($1, $2, $3)`, [
+      params.orgId,
+      params.userId,
+      params.adminRoleId,
+    ]);
     await globalPool.query(`INSERT INTO user_org_memberships (user_id, org_id, role_id) VALUES ($1, $2, $3)`, [
       params.userId,
       params.orgId,
       params.adminRoleId,
     ]);
+  },
+
+  async addUserToExistingOrg(params: {
+    orgId: string;
+    userId: string;
+    roleId?: string;
+    defaultMemberFlags: Record<string, boolean>;
+  }) {
+    const globalPool = dataRouter.postgres.getGlobalPool();
+    const orgRow = await globalPool.query(`SELECT org_id, shard_id FROM org_directory WHERE org_id = $1`, [
+      params.orgId,
+    ]);
+    if (orgRow.rows.length === 0) {
+      throw new Error(`Organization "${params.orgId}" does not exist`);
+    }
+
+    const shardId = resolveShardFromOrgId(params.orgId);
+    const shardPool = dataRouter.postgres.getPrimaryPool(shardId);
+
+    let assignedRoleId = params.roleId;
+    if (!assignedRoleId) {
+      assignedRoleId = `ROLE-${params.orgId}-MEMBER`;
+      await shardPool.query(
+        `INSERT INTO roles (role_id, org_id, name, flags, is_system)
+         VALUES ($1, $2, 'Member', $3::jsonb, TRUE)
+         ON CONFLICT (org_id, name) DO NOTHING`,
+        [assignedRoleId, params.orgId, JSON.stringify(params.defaultMemberFlags)],
+      );
+    }
+
+    await shardPool.query(
+      `INSERT INTO org_members (org_id, user_id, role_id) VALUES ($1, $2, $3) ON CONFLICT (org_id, user_id) DO NOTHING`,
+      [params.orgId, params.userId, assignedRoleId],
+    );
+    await shardPool.query(
+      `INSERT INTO org_member_roles (org_id, user_id, role_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+      [params.orgId, params.userId, assignedRoleId],
+    );
+    await globalPool.query(
+      `INSERT INTO user_org_memberships (user_id, org_id, role_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+      [params.userId, params.orgId, assignedRoleId],
+    );
+
+    return { orgId: params.orgId, shardId, roleId: assignedRoleId };
   },
 
   async verifyUserOtp(email: string, otpHash: string) {

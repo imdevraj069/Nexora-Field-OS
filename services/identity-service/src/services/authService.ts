@@ -35,6 +35,8 @@ export const AuthService = {
     fullName?: string;
     orgName?: string;
     orgInitials?: string;
+    orgId?: string;
+    roleId?: string;
     industryType?: string;
   }) {
     if (!input.email || !input.password || !input.fullName) {
@@ -52,11 +54,12 @@ export const AuthService = {
       verifyTokenHash: hashToken(verifyOtp),
     });
 
-    let createdOrg: { orgId: string; shardId: number } | null = null;
+    let joinedOrg: { orgId: string; shardId: number; roleId?: string } | null = null;
     if (input.orgName && input.orgInitials) {
       const orgId = generateOrgId(input.orgInitials);
       const shardId = resolveShardFromOrgId(orgId);
       const adminFlags = Object.fromEntries(Object.values(PERMISSION_FLAGS).map((f) => [f, true]));
+      const adminRoleId = `ROLE-${orgId}-ADMIN`;
 
       await IdentityRepo.createOrganization({
         orgId,
@@ -65,20 +68,31 @@ export const AuthService = {
         shardId,
         userId,
         industryType: input.industryType ?? 'general_field_ops',
-        adminRoleId: `ROLE-${orgId}-ADMIN`,
+        adminRoleId,
         adminFlags,
       });
-      createdOrg = { orgId, shardId };
+      joinedOrg = { orgId, shardId, roleId: adminRoleId };
+    } else if (input.orgId) {
+      joinedOrg = await IdentityRepo.addUserToExistingOrg({
+        orgId: input.orgId.trim().toUpperCase(),
+        userId,
+        roleId: input.roleId,
+        defaultMemberFlags: {
+          [PERMISSION_FLAGS.TASK_EXECUTE_OWN]: true,
+          [PERMISSION_FLAGS.TASK_UPLOAD_EVIDENCE]: true,
+          [PERMISSION_FLAGS.STAGE_VIEW_ONLY]: true,
+        },
+      });
     }
 
     publishEmailTask({
       template: 'verify-email',
       to: email,
       subject: 'Verify your Nexora Field OS account',
-      data: { fullName: input.fullName.trim(), verifyOtp, orgId: createdOrg?.orgId ?? null },
+      data: { fullName: input.fullName.trim(), verifyOtp, orgId: joinedOrg?.orgId ?? null },
     });
 
-    return { userId, org: createdOrg, message: 'Registered. Check email for verification code.' };
+    return { userId, org: joinedOrg, message: 'Registered. Check email for verification code.' };
   },
 
   async verifyEmail(email?: string, otp?: string) {

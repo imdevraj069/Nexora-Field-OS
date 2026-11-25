@@ -11,6 +11,28 @@ export const GatewayController = {
     const result = await ProjectService.upsertRole(req.auth!, req.body.name, req.body.flags);
     res.status(201).json(result);
   },
+  listMembers: async (req: AuthedRequest, res: Response) => {
+    const members = await ProjectService.listOrgMembers(req.auth!);
+    res.json({ members });
+  },
+  assignRoles: async (req: AuthedRequest, res: Response) => {
+    const result = await ProjectService.assignRolesToMember(
+      req.auth!,
+      String(req.params.userId),
+      req.body.roleIds,
+      req.body.allocatedStageIds,
+    );
+    res.json(result);
+  },
+  updateTaskStatus: async (req: AuthedRequest, res: Response) => {
+    const result = await ProjectService.updateTaskStatus(req.auth!, {
+      projectId: String(req.params.projectId),
+      taskId: String(req.params.taskId),
+      toStatus: req.body.status,
+      notes: req.body.notes,
+    });
+    res.json(result);
+  },
   submitEvidence: async (req: AuthedRequest, res: Response) => {
     const result = await ProjectService.submitEvidence(
       req.auth!,

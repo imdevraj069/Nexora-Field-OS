@@ -11,6 +11,7 @@ export const gatewayGraphqlSchema = buildSchema(`
     status: String!
     assignedUserId: String
     deadline: String
+    completedAt: String
     efficiencyScore: Float
   }
 
@@ -51,6 +52,7 @@ export const gatewayGraphqlSchema = buildSchema(`
     createProject(title: String!, description: String): ProjectSummary!
     createStage(projectId: ID!, name: String!, orderIndex: Int!): StageSummary!
     createTask(projectId: ID!, stageId: ID!, title: String!, taskType: String, assignedUserId: String, deadline: String): TaskSummary!
+    updateTaskStatus(projectId: ID!, taskId: ID!, toStatus: String!, notes: String): TaskSummary!
     invitePartnerOrg(projectId: ID!, partnerOrgId: String!, userId: String!, roleName: String!, allocatedStageIds: [String!]!): Boolean!
     generateAiProjectPlan(prompt: String!, industryHint: String): AiBlueprint!
   }
@@ -72,6 +74,8 @@ export function createGraphqlRoot(auth: AuthContext) {
       assignedUserId?: string;
       deadline?: string;
     }) => ProjectService.createTask(auth, args),
+    updateTaskStatus: (args: { projectId: string; taskId: string; toStatus: string; notes?: string }) =>
+      ProjectService.updateTaskStatus(auth, args),
     invitePartnerOrg: (args: {
       projectId: string;
       partnerOrgId: string;

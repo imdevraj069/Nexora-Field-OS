@@ -22,10 +22,20 @@ CREATE TABLE IF NOT EXISTS roles (
 CREATE TABLE IF NOT EXISTS org_members (
   org_id VARCHAR(16) NOT NULL REFERENCES organizations(org_id) ON DELETE CASCADE,
   user_id VARCHAR(32) NOT NULL,
-  role_id VARCHAR(64) NOT NULL REFERENCES roles(role_id),
+  role_id VARCHAR(64) REFERENCES roles(role_id),
   allocated_stage_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
   status VARCHAR(32) NOT NULL DEFAULT 'ACTIVE',
   PRIMARY KEY (org_id, user_id)
+);
+
+-- Many-to-many role assignments: one user can hold multiple roles within an organization
+CREATE TABLE IF NOT EXISTS org_member_roles (
+  org_id VARCHAR(16) NOT NULL,
+  user_id VARCHAR(32) NOT NULL,
+  role_id VARCHAR(64) NOT NULL REFERENCES roles(role_id) ON DELETE CASCADE,
+  assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (org_id, user_id, role_id),
+  FOREIGN KEY (org_id, user_id) REFERENCES org_members(org_id, user_id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS projects (

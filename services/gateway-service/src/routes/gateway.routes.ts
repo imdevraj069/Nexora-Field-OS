@@ -9,6 +9,9 @@ const router: Router = Router();
 
 router.get('/roles', authMiddleware, asyncHandler(GatewayController.listRoles));
 router.post('/roles', authMiddleware, asyncHandler(GatewayController.upsertRole));
+router.get('/org/members', authMiddleware, asyncHandler(GatewayController.listMembers));
+router.put('/org/members/:userId/roles', authMiddleware, asyncHandler(GatewayController.assignRoles));
+router.patch('/projects/:projectId/tasks/:taskId/status', authMiddleware, asyncHandler(GatewayController.updateTaskStatus));
 router.post(
   '/projects/:projectId/tasks/:taskId/evidence',
   authMiddleware,

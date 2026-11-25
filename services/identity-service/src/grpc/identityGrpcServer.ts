@@ -5,6 +5,19 @@ import { IDENTITY_PROTO_PATH } from '@nexora/proto';
 import { AuthTokenPayload, resolveShardFromOrgId } from '@nexora/shared-types';
 import { dataRouter, envConfig } from '../config/env';
 
+function mergeRoleFlags(roleRows: Array<{ name: string; flags: Record<string, boolean> }>) {
+  const mergedFlags: Record<string, boolean> = {};
+  for (const row of roleRows) {
+    for (const [k, v] of Object.entries(row.flags ?? {})) {
+      if (v === true) mergedFlags[k] = true;
+    }
+  }
+  return {
+    roleNames: roleRows.map((r) => r.name).join(', '),
+    mergedFlags,
+  };
+}
+
 export function startIdentityGrpcServer(): void {
   const pkgDef = protoLoader.loadSync(IDENTITY_PROTO_PATH, { keepCase: true, longs: String, enums: String });
   const proto = grpc.loadPackageDefinition(pkgDef) as unknown as {
@@ -55,6 +68,8 @@ export function startIdentityGrpcServer(): void {
       try {
         const { user_id, user_org_id, project_id } = call.request;
         const globalPool = dataRouter.postgres.getGlobalPool();
+
+        // 1. Cross-org collaborator check
         const collab = await globalPool.query(
           `SELECT owner_org_id, owner_shard_id, project_role_name, permission_flags, allocated_stage_ids
            FROM project_collaborators WHERE project_id = $1 AND user_id = $2`,
@@ -74,14 +89,16 @@ export function startIdentityGrpcServer(): void {
           return;
         }
 
+        // 2. Home org multi-role flag aggregation
         const ownerShardId = resolveShardFromOrgId(user_org_id);
-        const shardPool = dataRouter.postgres.getReadPool(ownerShardId);
+        const shardPool = dataRouter.postgres.getReadPool(ownerShardId, true);
         const memberRes = await shardPool.query(
-          `SELECT r.name, r.flags, m.allocated_stage_ids
+          `SELECT m.allocated_stage_ids, r.name, r.flags
            FROM org_members m
-           JOIN roles r ON r.role_id = m.role_id
-           JOIN projects p ON p.org_id = m.org_id
-           WHERE m.org_id = $1 AND m.user_id = $2 AND p.project_id = $3 AND m.status = 'ACTIVE'`,
+           JOIN projects p ON p.org_id = m.org_id AND p.project_id = $3
+           LEFT JOIN org_member_roles omr ON omr.org_id = m.org_id AND omr.user_id = m.user_id
+           JOIN roles r ON r.role_id = COALESCE(omr.role_id, m.role_id)
+           WHERE m.org_id = $1 AND m.user_id = $2 AND m.status = 'ACTIVE'`,
           [user_org_id, user_id, project_id],
         );
         if (memberRes.rows.length === 0) {
@@ -89,14 +106,14 @@ export function startIdentityGrpcServer(): void {
           return;
         }
 
-        const row = memberRes.rows[0];
+        const { roleNames, mergedFlags } = mergeRoleFlags(memberRes.rows);
         callback(null, {
           allowed: true,
           owner_org_id: user_org_id,
           owner_shard_id: ownerShardId,
-          role_name: row.name,
-          flags: row.flags,
-          allocated_stage_ids: row.allocated_stage_ids,
+          role_name: roleNames,
+          flags: mergedFlags,
+          allocated_stage_ids: memberRes.rows[0].allocated_stage_ids ?? [],
           is_external_collaborator: false,
         });
       } catch (err) {
