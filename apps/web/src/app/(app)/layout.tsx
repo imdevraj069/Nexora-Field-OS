@@ -209,9 +209,11 @@ function WorkspaceShell({ children }: { children: React.ReactNode }) {
                 {userOrgs.map((org) => (
                   <button
                     key={org.org_id}
-                    onClick={() => {
+                    onClick={async () => {
                       switchOrg(org);
                       setShowOrgDropdown(false);
+                      await refreshAccessToken(org.org_id);
+                      window.location.reload();
                     }}
                     className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs text-left cursor-pointer ${
                       org.org_id === activeOrg?.org_id ? 'bg-orange-500/15 text-orange-300 font-semibold' : 'text-zinc-300 hover:bg-white/[0.04]'

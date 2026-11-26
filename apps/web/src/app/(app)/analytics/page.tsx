@@ -24,12 +24,20 @@ interface AnalyticsData {
   avgEvidence: number;
   evaluatedCount: number;
   scores: EfficiencyScore[];
+  reports?: Array<{
+    projectId: string;
+    overall_health_score: number;
+    completion_percentage: number;
+    executive_summary: string;
+    recommendations?: string;
+    createdAt?: string;
+  }>;
 }
 
 export default function AnalyticsGovernancePage() {
   const { token, activeOrg } = useWorkspaceAuth();
   const [data, setData] = useState<AnalyticsData | null>(null);
-  const [projects, setProjects] = useState<Array<{ project_id: string; title: string }>>([]);
+  const [projects, setProjects] = useState<Array<{ projectId: string; title: string }>>([]);
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [synthesizing, setSynthesizing] = useState(false);
   const [synthesisMsg, setSynthesisMsg] = useState("");
@@ -53,9 +61,12 @@ export default function AnalyticsGovernancePage() {
       ]);
       if (aRes.ok) setData(await aRes.json());
       if (pRes.ok) {
-        const list = (await pRes.json()).projects || [];
+        const list = ((await pRes.json()).projects || []).map((p: any) => ({
+          projectId: p.projectId || p.project_id,
+          title: p.title,
+        }));
         setProjects(list);
-        if (list.length > 0) setSelectedProjectId((p) => p || list[0].project_id);
+        if (list.length > 0) setSelectedProjectId((p) => p || list[0].projectId);
       }
     } finally {
       setLoading(false);
@@ -71,14 +82,14 @@ export default function AnalyticsGovernancePage() {
     setSynthesizing(true);
     setSynthesisMsg("");
     try {
-      const res = await fetch(`/api/v1/projects/${selectedProjectId}/ai-synthesis`, {
+      const res = await fetch(`/api/v1/projects/${selectedProjectId}/analyze-ai`, {
         method: "POST",
         headers,
       });
       const body = await res.json().catch(() => ({}));
       setSynthesisMsg(
         res.ok
-          ? body.summary || "AI Governance synthesis queued and completed."
+          ? body.executive_summary || "AI Governance synthesis completed."
           : body.message || "AI synthesis failed."
       );
       await loadAnalytics();
@@ -109,7 +120,7 @@ export default function AnalyticsGovernancePage() {
               className="glass-subtle rounded-xl px-3 py-2 text-xs font-medium outline-none"
             >
               {projects.map((p) => (
-                <option key={p.project_id} value={p.project_id}>
+                <option key={p.projectId} value={p.projectId}>
                   {p.title}
                 </option>
               ))}
@@ -225,6 +236,23 @@ export default function AnalyticsGovernancePage() {
               </div>
             )}
           </div>
+
+          {data?.reports && data.reports.length > 0 && (
+            <div className="glass-card rounded-2xl p-5 space-y-3">
+              <h2 className="text-sm font-bold">Saved Gemini 2.5 Project Reports</h2>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                {data.reports.map((rep, idx) => (
+                  <div key={`${rep.projectId}-${idx}`} className="glass-subtle rounded-xl p-4 space-y-2">
+                    <div className="flex items-center justify-between text-xs font-bold">
+                      <span>{rep.projectId}</span>
+                      <span className="text-orange-600">Health: {rep.overall_health_score}/100 ({rep.completion_percentage}%)</span>
+                    </div>
+                    <p className="text-xs text-zinc-600 leading-relaxed">{rep.executive_summary}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

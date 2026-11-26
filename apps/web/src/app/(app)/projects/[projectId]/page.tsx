@@ -75,6 +75,7 @@ export default function ProjectDetailView() {
 
   const [analyzingAi, setAnalyzingAi] = useState(false);
   const [aiError, setAiError] = useState('');
+  const [actionError, setActionError] = useState('');
   const [aiReport, setAiReport] = useState<any>(null);
   const [projectTeam, setProjectTeam] = useState<Array<{ userId: string; fullName: string; email: string; roleName: string; allocatedStageIds: string[] }>>([]);
   const [showTeamPanel, setShowTeamPanel] = useState(false);
@@ -148,7 +149,7 @@ export default function ProjectDetailView() {
       setNewStageDeadline('');
       await load();
     } catch (err) {
-      alert((err as Error).message);
+      setActionError((err as Error).message);
     } finally {
       setAddingStage(false);
     }
@@ -171,7 +172,7 @@ export default function ProjectDetailView() {
       setEditingStageId(null);
       await load();
     } catch (err) {
-      alert((err as Error).message);
+      setActionError((err as Error).message);
     }
   }
 
@@ -181,7 +182,7 @@ export default function ProjectDetailView() {
       await apiRequest(`/api/v1/projects/${projectId}/stages/${stageId}`, { method: 'DELETE' }, token);
       await load();
     } catch (err) {
-      alert((err as Error).message);
+      setActionError((err as Error).message);
     }
   }
 
@@ -198,7 +199,7 @@ export default function ProjectDetailView() {
       setShowBlueprintPanel(false);
       await load();
     } catch (err) {
-      alert((err as Error).message);
+      setActionError((err as Error).message);
     } finally {
       setApplyingBlueprint(false);
     }
@@ -251,7 +252,7 @@ export default function ProjectDetailView() {
       setCollabNotes('');
       await load();
     } catch (err) {
-      alert((err as Error).message);
+      setActionError((err as Error).message);
     }
   }
 
@@ -275,7 +276,7 @@ export default function ProjectDetailView() {
       setAssignMemberId('');
       await load();
     } catch (err) {
-      alert((err as Error).message);
+      setActionError((err as Error).message);
     }
   }
 
@@ -303,7 +304,7 @@ export default function ProjectDetailView() {
       setTeamMemberId('');
       await load();
     } catch (err) {
-      alert((err as Error).message);
+      setActionError((err as Error).message);
     }
   }
 
@@ -678,6 +679,16 @@ export default function ProjectDetailView() {
               ))
             )}
           </div>
+        </div>
+      )}
+
+      {/* Inline Error Banner */}
+      {actionError && (
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-300">
+          <span>{actionError}</span>
+          <button type="button" onClick={() => setActionError('')} className="text-red-200 hover:underline cursor-pointer">
+            Dismiss
+          </button>
         </div>
       )}
 

@@ -50,6 +50,7 @@ interface MemberOption {
   orgId?: string;
   orgName?: string;
   isExternal?: boolean;
+  isProjectTeam?: boolean;
 }
 
 interface TaskCreateModalProps {
@@ -265,11 +266,34 @@ export function TaskCreateModal({
                   className="w-full rounded-xl border border-white/[0.08] bg-[#18181c] px-3 py-2 text-xs text-zinc-100 outline-none"
                 >
                   <option value="">Unassigned</option>
-                  {members.map((m) => (
-                    <option key={m.userId} value={m.userId}>
-                      {m.fullName || m.email}{m.orgName ? ` (${m.orgName})` : ''}
-                    </option>
-                  ))}
+                  {members.some((m) => m.isProjectTeam) ? (
+                    <>
+                      <optgroup label="Project Team &amp; Partners">
+                        {members
+                          .filter((m) => m.isProjectTeam)
+                          .map((m) => (
+                            <option key={m.userId} value={m.userId}>
+                              {m.fullName || m.email}{m.orgName ? ` (${m.orgName})` : ''}
+                            </option>
+                          ))}
+                      </optgroup>
+                      <optgroup label="Other Organization Members">
+                        {members
+                          .filter((m) => !m.isProjectTeam)
+                          .map((m) => (
+                            <option key={m.userId} value={m.userId}>
+                              {m.fullName || m.email}{m.orgName ? ` (${m.orgName})` : ''}
+                            </option>
+                          ))}
+                      </optgroup>
+                    </>
+                  ) : (
+                    members.map((m) => (
+                      <option key={m.userId} value={m.userId}>
+                        {m.fullName || m.email}{m.orgName ? ` (${m.orgName})` : ''}
+                      </option>
+                    ))
+                  )}
                 </select>
               </div>
               <div>

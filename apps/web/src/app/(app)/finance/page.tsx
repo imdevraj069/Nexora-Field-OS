@@ -92,6 +92,8 @@ export default function FinancePage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [openRevisionsFor, setOpenRevisionsFor] = useState<string | null>(null);
+  const [revisionsByProject, setRevisionsByProject] = useState<Record<string, any[]>>({});
 
   // Budget form
   const [bProjectId, setBProjectId] = useState("");
@@ -199,6 +201,21 @@ export default function FinancePage() {
     const f = Math.min(t, Math.max(0, Number(val)));
     setBFloatedRupees(String(f));
     setBDistributedRupees(String(Math.max(0, t - f)));
+  }
+
+  async function toggleRevisions(projectId: string) {
+    if (openRevisionsFor === projectId) {
+      setOpenRevisionsFor(null);
+      return;
+    }
+    setOpenRevisionsFor(projectId);
+    if (!revisionsByProject[projectId]) {
+      const res = await fetch(`/api/v1/finance/budgets/${projectId}/revisions`, { headers });
+      if (res.ok) {
+        const d = await res.json();
+        setRevisionsByProject((prev) => ({ ...prev, [projectId]: d.revisions || [] }));
+      }
+    }
   }
 
   async function handleSaveBudget(e: FormEvent) {
@@ -578,6 +595,32 @@ export default function FinancePage() {
                         <span className="font-bold text-emerald-700">{formatINR(remainingPaise)}</span>
                       </div>
                     </div>
+                    <div className="pt-1 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => void toggleRevisions(b.project_id)}
+                        className="text-[11px] font-semibold text-orange-600 hover:underline cursor-pointer"
+                      >
+                        {openRevisionsFor === b.project_id ? "Hide Revision History" : "View Revision History"}
+                      </button>
+                    </div>
+                    {openRevisionsFor === b.project_id && (
+                      <div className="pt-2 border-t border-zinc-200/60 space-y-1.5 text-[11px]">
+                        {(revisionsByProject[b.project_id] || []).length === 0 ? (
+                          <p className="text-zinc-500">No budget revisions recorded yet.</p>
+                        ) : (
+                          (revisionsByProject[b.project_id] || []).map((rev: any) => (
+                            <div key={rev.revision_id} className="flex items-center justify-between glass-subtle rounded-lg px-2.5 py-1.5">
+                              <span>
+                                {formatINR(rev.previous_total_paise)} → <strong>{formatINR(rev.new_total_paise)}</strong>
+                                {rev.reason ? ` (${rev.reason})` : ""}
+                              </span>
+                              <span className="text-zinc-400">{new Date(rev.created_at).toLocaleDateString()}</span>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })

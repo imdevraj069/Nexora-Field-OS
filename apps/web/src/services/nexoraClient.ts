@@ -25,20 +25,21 @@ export function isTokenExpiringSoon(token: string | null, bufferSeconds = 180): 
   }
 }
 
-export async function refreshAccessToken(): Promise<string | null> {
+export async function refreshAccessToken(overrideOrgId?: string): Promise<string | null> {
   if (typeof window === 'undefined') return null;
-  if (refreshInFlight) return refreshInFlight;
+  if (refreshInFlight && !overrideOrgId) return refreshInFlight;
 
   const { refreshToken, activeOrg, setTokens, logout } = useAuthStore.getState();
   if (!refreshToken) return null;
 
   const fetchFn = nativeFetch || window.fetch.bind(window);
+  const targetOrgId = overrideOrgId ?? activeOrg?.org_id;
   refreshInFlight = (async () => {
     try {
       const resp = await fetchFn('/api/v1/auth/refresh', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken, orgId: activeOrg?.org_id }),
+        body: JSON.stringify({ refreshToken, orgId: targetOrgId }),
       });
       if (!resp.ok) {
         if (resp.status === 401 || resp.status === 403) {

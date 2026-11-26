@@ -1331,9 +1331,9 @@ export const ProjectService = {
     const globalPool = dataRouter.postgres.getGlobalPool();
     const ownerPool = dataRouter.postgres.getReadPool(ownerShardId, true);
 
-    const [ownerMembersRes, ownerOrgRes, collabRes] = await Promise.all([
+    const [ownerMembersRes, ownerOrgRes, collabRes, stagesRes] = await Promise.all([
       ownerPool.query(
-        `SELECT m.user_id, r.name AS role_name
+        `SELECT m.user_id, m.allocated_stage_ids, r.name AS role_name
          FROM org_members m
          LEFT JOIN roles r ON r.role_id = m.role_id
          WHERE m.org_id = $1 AND m.status = 'ACTIVE'`,
@@ -1348,8 +1348,10 @@ export const ProjectService = {
          WHERE c.project_id = $1`,
         [projectId],
       ),
+      ownerPool.query(`SELECT stage_id FROM stages WHERE project_id = $1`, [projectId]),
     ]);
 
+    const projectStageSet = new Set(stagesRes.rows.map((s) => String(s.stage_id)));
     const ownerUserIds = ownerMembersRes.rows.map((r) => String(r.user_id));
     const usersRes = ownerUserIds.length
       ? await globalPool.query(`SELECT user_id, full_name, email FROM users WHERE user_id = ANY($1::text[])`, [ownerUserIds])
@@ -1365,6 +1367,7 @@ export const ProjectService = {
       orgName: string;
       roleName: string;
       isExternal: boolean;
+      isProjectTeam: boolean;
     }> = [];
     const seen = new Set<string>();
 
@@ -1373,6 +1376,8 @@ export const ProjectService = {
       if (seen.has(uid)) continue;
       seen.add(uid);
       const u = userMap.get(uid);
+      const alloc = Array.isArray(m.allocated_stage_ids) ? (m.allocated_stage_ids as string[]) : [];
+      const isTeam = alloc.some((id) => projectStageSet.has(String(id)));
       assignees.push({
         userId: uid,
         fullName: u?.full_name || u?.email || uid,
@@ -1381,6 +1386,7 @@ export const ProjectService = {
         orgName: String(ownerOrgName),
         roleName: String(m.role_name || 'Member'),
         isExternal: false,
+        isProjectTeam: isTeam,
       });
     }
 
@@ -1396,6 +1402,7 @@ export const ProjectService = {
         orgName: String(c.partner_org_name || c.partner_org_id),
         roleName: String(c.project_role_name || 'Collaborator'),
         isExternal: true,
+        isProjectTeam: true,
       });
     }
 
@@ -1677,7 +1684,7 @@ export const ProjectService = {
 
     const [filesRes, quotaRes] = await Promise.all([
       pool.query(
-        `SELECT m.*, p.title AS project_title, t.title AS task_title
+        `SELECT m.*, p.title AS project_title, p.status AS project_status, t.title AS task_title
          FROM media_assets m
          LEFT JOIN projects p ON p.project_id = m.project_id
          LEFT JOIN tasks t ON t.task_id = m.task_id
@@ -1718,6 +1725,7 @@ export const ProjectService = {
         fileId: r.file_id,
         projectId: r.project_id,
         projectTitle: r.project_title ?? r.project_id,
+        projectStatus: r.project_status ?? 'ACTIVE',
         taskId: r.task_id,
         taskTitle: r.task_title ?? null,
         bucket: r.bucket,
@@ -1759,12 +1767,27 @@ export const ProjectService = {
     const avgEvidence =
       rows.length > 0 ? Number((rows.reduce((acc, r) => acc + Number(r.evidence_completeness), 0) / rows.length).toFixed(1)) : 0;
 
+    let reports: Array<Record<string, unknown>> = [];
+    try {
+      const mongoConn = await dataRouter.mongo.getConnectionForOrg(auth.activeOrgId);
+      const rawReports = await mongoConn
+        .collection('project_ai_reports')
+        .find({ orgId: auth.activeOrgId })
+        .sort({ createdAt: -1 })
+        .limit(6)
+        .toArray();
+      reports = rawReports.map((r) => ({ ...r, _id: String(r._id) }));
+    } catch {
+      // ignore if mongo unavailable
+    }
+
     return {
       avgEfficiency,
       avgTimeliness,
       avgEvidence,
       evaluatedCount: rows.length,
       scores: rows,
+      reports,
     };
   },
 

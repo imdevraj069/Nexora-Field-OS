@@ -12,6 +12,7 @@ export function VoiceRecorderInput({ onAudioCaptured, onTranscriptUpdate }: Voic
   const [recording, setRecording] = useState(false);
   const [lang, setLang] = useState<'en-IN' | 'hi-IN'>('en-IN');
   const [recordedUrl, setRecordedUrl] = useState<string | null>(null);
+  const [micError, setMicError] = useState('');
   const [speechSupported] = useState(() => {
     if (typeof window === 'undefined') return true;
     const win = window as unknown as Record<string, unknown>;
@@ -68,9 +69,10 @@ export function VoiceRecorderInput({ onAudioCaptured, onTranscriptUpdate }: Voic
         recognitionRef.current = rec;
       }
 
+      setMicError('');
       setRecording(true);
     } catch {
-      alert('Microphone permission is required to record voice notes.');
+      setMicError('Microphone permission is required to record voice notes.');
     }
   }
 
@@ -119,6 +121,9 @@ export function VoiceRecorderInput({ onAudioCaptured, onTranscriptUpdate }: Voic
         <span className="text-[10px] text-zinc-400">
           Audio captured for Gemini 2.5 transcription
         </span>
+      )}
+      {micError && (
+        <span className="w-full text-[11px] text-red-400">{micError}</span>
       )}
     </div>
   );

@@ -22,6 +22,7 @@ interface EvidenceFile {
   fileId: string;
   projectId: string;
   projectTitle?: string;
+  projectStatus?: string;
   taskId?: string | null;
   taskTitle?: string | null;
   bucket?: string;
@@ -335,18 +336,27 @@ export default function EvidenceMediaDirectoryPage() {
                       )}
                       Preview
                     </button>
-                    <button
-                      onClick={() => handleDelete(file)}
-                      disabled={deletingId === file.fileId}
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-red-600 hover:bg-red-50 transition"
-                      title="Delete file from MinIO"
-                    >
-                      {deletingId === file.fileId ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <Trash2 className="w-3.5 h-3.5" />
-                      )}
-                    </button>
+                    {file.projectStatus === "ARCHIVED" ? (
+                      <span
+                        className="inline-flex items-center px-2.5 py-1 rounded-xl text-[10px] font-bold bg-zinc-200/80 text-zinc-600"
+                        title="Media cannot be deleted from an archived project"
+                      >
+                        Archived · Locked
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => handleDelete(file)}
+                        disabled={deletingId === file.fileId}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-red-600 hover:bg-red-50 transition"
+                        title="Delete file from MinIO"
+                      >
+                        {deletingId === file.fileId ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>

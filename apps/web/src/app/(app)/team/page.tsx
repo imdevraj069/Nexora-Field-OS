@@ -45,6 +45,7 @@ export default function TeamManagementPage() {
     [PERMISSION_FLAGS.STAGE_VIEW_ONLY]: true,
   });
   const [savingRole, setSavingRole] = useState(false);
+  const [teamError, setTeamError] = useState('');
 
   async function loadTeam() {
     if (!token || !activeOrg) return;
@@ -87,7 +88,7 @@ export default function TeamManagementPage() {
       setInviteUrl(res.inviteUrl);
       setInviteEmail('');
     } catch (err) {
-      alert((err as Error).message || 'Failed to send invite');
+      setTeamError((err as Error).message || 'Failed to send invite');
     } finally {
       setLoadingInvite(false);
     }
@@ -106,7 +107,7 @@ export default function TeamManagementPage() {
       setNewRoleName('');
       await loadTeam();
     } catch (err) {
-      alert((err as Error).message);
+      setTeamError((err as Error).message);
     } finally {
       setSavingRole(false);
     }
@@ -129,7 +130,7 @@ export default function TeamManagementPage() {
       );
       await loadTeam();
     } catch (err) {
-      alert((err as Error).message);
+      setTeamError((err as Error).message);
     }
   }
 
@@ -141,6 +142,14 @@ export default function TeamManagementPage() {
 
   return (
     <div className="space-y-5">
+      {teamError && (
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-400">
+          <span>{teamError}</span>
+          <button type="button" onClick={() => setTeamError('')} className="hover:underline cursor-pointer">
+            Dismiss
+          </button>
+        </div>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-white">Team & Dynamic RBAC</h1>
