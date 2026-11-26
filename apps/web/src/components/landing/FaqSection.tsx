@@ -39,11 +39,11 @@ export function FaqSection() {
         transition={{ duration: 0.5 }}
         className="text-center mb-10"
       >
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-500/10 px-3.5 py-1 text-xs font-bold text-orange-600">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-500/15 px-3.5 py-1 text-xs font-bold text-orange-400 border border-orange-500/25">
           <HelpCircle className="w-3.5 h-3.5" />
           Frequently Asked Questions
         </span>
-        <h2 className="font-display text-3xl sm:text-4xl font-bold tracking-tight mt-3 text-[#111318]">
+        <h2 className="landing-h2 font-display text-3xl sm:text-4xl font-bold tracking-tight mt-3 text-white">
           Everything You Need to Know
         </h2>
       </motion.div>
@@ -58,11 +58,11 @@ export function FaqSection() {
                 onClick={() => setOpenIdx(isOpen ? null : idx)}
                 className="w-full flex items-center justify-between gap-4 p-5 text-left cursor-pointer"
               >
-                <span className="font-display text-sm sm:text-base font-bold text-[#111318]">
+                <span className="landing-faq-q font-display text-sm sm:text-base font-bold text-white">
                   {item.q}
                 </span>
                 <ChevronDown
-                  className={`w-4 h-4 shrink-0 text-orange-600 transition-transform duration-300 ${
+                  className={`w-4 h-4 shrink-0 text-orange-400 transition-transform duration-300 ${
                     isOpen ? 'rotate-180' : ''
                   }`}
                 />
@@ -76,7 +76,7 @@ export function FaqSection() {
                     transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
                     className="overflow-hidden"
                   >
-                    <p className="px-5 pb-5 text-xs sm:text-sm text-zinc-600 leading-relaxed">
+                    <p className="landing-faq-a px-5 pb-5 text-xs sm:text-sm text-zinc-200 leading-relaxed">
                       {item.a}
                     </p>
                   </motion.div>

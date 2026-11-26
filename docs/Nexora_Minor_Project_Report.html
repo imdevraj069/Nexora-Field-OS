@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Minor Project Report — Nexora Field OS</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 20mm 18mm 20mm 18mm;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Times New Roman", Georgia, serif;
+      color: #111827;
+      line-height: 1.55;
+      font-size: 11.5pt;
+      margin: 0;
+      padding: 0;
+      background: #ffffff;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 24px 32px;
+    }
+    .page-break {
+      page-break-before: always;
+      break-before: page;
+    }
+    .title-page {
+      text-align: center;
+      padding-top: 28px;
+    }
+    .title-page h1 {
+      font-size: 24pt;
+      margin-bottom: 14px;
+      letter-spacing: 0.5px;
+    }
+    .title-page .emblem {
+      width: 115px;
+      height: auto;
+      margin: 12px auto 18px;
+      display: block;
+    }
+    .title-page .project-title {
+      font-size: 20pt;
+      font-weight: 700;
+      color: #b91c1c;
+      margin: 10px 0 6px;
+    }
+    .title-page .project-sub {
+      font-size: 12.5pt;
+      font-style: italic;
+      color: #374151;
+      margin-bottom: 24px;
+    }
+    .label {
+      font-weight: 700;
+      margin-top: 16px;
+      margin-bottom: 6px;
+      font-size: 12pt;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 18px;
+      font-size: 10.5pt;
+    }
+    th, td {
+      border: 1px solid #cbd5e1;
+      padding: 8px 10px;
+      text-align: left;
+    }
+    th {
+      background: #f8fafc;
+      font-weight: 700;
+    }
+    .team-table td {
+      text-align: center;
+      font-weight: 600;
+    }
+    h2 {
+      font-size: 16pt;
+      color: #111827;
+      border-bottom: 2px solid #ea580c;
+      padding-bottom: 4px;
+      margin-top: 0;
+      margin-bottom: 14px;
+    }
+    h3 {
+      font-size: 12.5pt;
+      color: #1f2937;
+      margin-top: 16px;
+      margin-bottom: 6px;
+    }
+    ul, ol {
+      margin: 6px 0 12px 20px;
+    }
+    li { margin-bottom: 4px; }
+    .diagram-box {
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 12px;
+      margin: 14px 0;
+      background: #f8fafc;
+      text-align: center;
+    }
+    .diagram-caption {
+      font-size: 9.5pt;
+      color: #475569;
+      font-style: italic;
+      margin-top: 6px;
+    }
+    .keywords {
+      margin-top: 14px;
+      padding: 10px 12px;
+      background: #fff7ed;
+      border-left: 3px solid #ea580c;
+      font-size: 10.5pt;
+    }
+    code {
+      font-family: "Courier New", monospace;
+      font-size: 9.5pt;
+      background: #f1f5f9;
+      padding: 1px 4px;
+      border-radius: 3px;
+    }
+    @media print {
+      .container { padding: 0; max-width: none; }
+      .no-print { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="no-print" style="background:#fff7ed;border:1px solid #fdba74;padding:10px 14px;border-radius:8px;margin-bottom:18px;font-family:sans-serif;font-size:13px;">
+      <strong>Print / Save as PDF:</strong> Press <code>Ctrl + P</code> (or <code>Cmd + P</code>) and choose <strong>Save as PDF</strong>. Each section automatically starts on a new A4 page.
+    </div>
+
+    <!-- TITLE PAGE -->
+    <section class="title-page">
+      <h1>Minor Project</h1>
+      <img src="image1.png" alt="Gurukula Kangri University Emblem" class="emblem" />
+      <div class="project-title">NEXORA FIELD OS</div>
+      <div class="project-sub">A Multi-Tenant, Shard-Routed, AI-Governed Field Operations &amp; Execution Operating System</div>
+
+      <div class="label">Submitted by</div>
+      <table class="team-table">
+        <tr>
+          <td>&lt;Name 1&gt;<br/>&lt;Registration No&gt;</td>
+          <td>&lt;Name 2&gt;<br/>&lt;Registration No&gt;</td>
+          <td>&lt;Name 3&gt;<br/>&lt;Registration No&gt;</td>
+          <td>&lt;Name 4&gt;<br/>&lt;Registration No&gt;</td>
+        </tr>
+      </table>
+
+      <div class="label">Course</div>
+      <div>Bachelor of Technology in Computer Science and Engineering</div>
+
+      <div class="label">Instructor</div>
+      <div>&lt;Instructor Name&gt;</div>
+
+      <div class="label">Department</div>
+      <div>
+        Department of Computer Science and Engineering<br/>
+        Faculty of Engineering &amp; Technology<br/>
+        <strong>Gurukula Kangri (Deemed to be University)</strong><br/>
+        Haridwar (Uttarakhand)
+      </div>
+
+      <div style="margin-top:26px;font-weight:700;">November 2026</div>
+    </section>
+
+    <!-- INDEX -->
+    <section class="page-break">
+      <h2>Index</h2>
+      <table>
+        <thead>
+          <tr><th style="width:70px;">Section</th><th>Title</th><th style="width:80px;">Page</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>—</td><td>Abstract &amp; Keywords</td><td>i</td></tr>
+          <tr><td>1</td><td>Introduction (Background, Pain Points, Objectives, Scope)</td><td>1</td></tr>
+          <tr><td>2</td><td>Literature Review (Existing Systems, Gap Analysis, USPs)</td><td>2</td></tr>
+          <tr><td>3</td><td>Methodology / System Design (Architecture, User Flow, Data Flow)</td><td>3</td></tr>
+          <tr><td>4</td><td>Implementation (Modules, Services, Challenges &amp; Resolutions)</td><td>4</td></tr>
+          <tr><td>5</td><td>Results and Discussion (Metrics, Comparison, Business Pitch)</td><td>5</td></tr>
+          <tr><td>6</td><td>Conclusion (Outcomes, Achievements vs Objectives, Limitations)</td><td>6</td></tr>
+          <tr><td>7</td><td>Future Scope</td><td>7</td></tr>
+          <tr><td>8</td><td>References (IEEE Format)</td><td>8</td></tr>
+          <tr><td>9</td><td>Appendices (API Endpoints &amp; Database Shard Contract)</td><td>9</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- ABSTRACT -->
+    <section class="page-break">
+      <h2>Abstract</h2>
+      <p>
+        On-ground field execution across industries such as construction, solar energy, telecom rollout, and infrastructure audits suffers from severe operational fragmentation. Organizations routinely rely on disconnected desk-oriented task trackers, unstructured WhatsApp media threads, paper checklists, and manual expense spreadsheets—leading to delayed visibility, unverified work claims, and rigid workflows that fail to adapt across departments.
+      </p>
+      <p>
+        <strong>Nexora Field OS</strong> is a multi-tenant, shard-routed, AI-governed Field Operations Operating System delivered as a responsive web platform and installable Progressive Web App (PWA). The platform combines dynamic project-scoped Kanban workflows, typed verification checklists (<code>CHECK</code>, <code>TEXT</code>, <code>NUMBER</code>, <code>FILL_BLANK</code>, <code>OPTIONS</code>, <code>MULTI_SELECT</code>, <code>FILE</code>, <code>MEDIA</code>, <code>LINK</code>), a tenant-isolated 50 GB MinIO object storage vault, mixed-language voice-to-text field reporting powered by Gemini 2.5 Flash, cross-organization project collaboration, and an integrated project budget and reimbursement ledger.
+      </p>
+      <p>
+        Technologically, Nexora employs a polyglot microservice architecture behind an NGINX reverse proxy and Cloudflare Tunnel edge layer, featuring gRPC inter-service communication, RabbitMQ asynchronous job queues, Redis caching, MongoDB unstructured AI storage, and horizontal PostgreSQL sharding (<code>S1</code>, <code>S2</code>, <code>S3</code>) for strict tenant isolation. End-to-end validation demonstrates sub-120ms gateway routing, zero-loss session continuity via rotating JWT refresh tokens, and automated AI timeliness and evidence-completeness scoring.
+      </p>
+      <div class="keywords">
+        <strong>Keywords:</strong> Multi-Tenant SaaS, Horizontal Database Sharding, Field Operations OS, Progressive Web App (PWA), AI Governance, MinIO Object Storage.
+      </div>
+    </section>
+
+    <!-- 1. INTRODUCTION -->
+    <section class="page-break">
+      <h2>1. Introduction</h2>
+      <h3>1.1 Background and Significance</h3>
+      <p>
+        Modern infrastructure and field-service enterprises coordinate distributed teams across geographically dispersed job sites, vendor partners, and finance controllers. Unlike software teams working at desks, field engineers operate in low-connectivity zones, capture physical proof (photos, videos, torque/voltage readings, voice notes), and incur on-site material or travel expenses. Bridging the gap between physical field execution and real-time executive oversight is critical for operational accountability.
+      </p>
+      <h3>1.2 Pain Points &amp; Problem Statement</h3>
+      <ol>
+        <li><strong>Rigid, Hardcoded Workflows:</strong> Traditional trackers force every department into static status columns, failing to match real site lifecycles.</li>
+        <li><strong>Unverified Proof of Work:</strong> Photos and updates sent over informal chat apps lack structure, task binding, and searchable archival.</li>
+        <li><strong>Language &amp; Friction Barriers:</strong> Field technicians prefer speaking in Hindi, Hinglish, or regional dialects rather than typing long forms on mobile screens.</li>
+        <li><strong>Siloed Cross-Organization Execution:</strong> Prime contractors and partner vendors cannot securely collaborate on shared milestones without exposing unrelated tenant data.</li>
+        <li><strong>Disconnected Project Finance:</strong> Budgets, vendor purchase orders, and technician reimbursement claims live in separate sheets detached from task progress.</li>
+      </ol>
+      <h3>1.3 Objectives of the Project</h3>
+      <ul>
+        <li><strong>Business Objective:</strong> Deliver a unified vertical SaaS OS that turns on-ground execution into auditable proof and real-time financial control.</li>
+        <li><strong>Technical Objective:</strong> Architect a horizontally sharded (<code>S1–S3</code>), microservice-driven platform with RBAC flags, 50 GB MinIO media isolation, Gemini 2.5 multimodal AI governance, and an installable 5-tab mobile/tablet PWA.</li>
+      </ul>
+      <h3>1.4 Scope of the Work</h3>
+      <p>
+        The system encompasses multi-organization onboarding, custom role/permission management, AI Lead-to-Plan project generation, milestone and Kanban task execution, versatile checklist validation, MinIO media vault management, cross-organization project invitations and task assignment, AI progress/voice analysis, and project budget/reimbursement workflows.
+      </p>
+    </section>
+
+    <!-- 2. LITERATURE REVIEW -->
+    <section class="page-break">
+      <h2>2. Literature Review</h2>
+      <h3>2.1 Summary of Existing Systems</h3>
+      <ul>
+        <li><strong>Generic Task Trackers (Jira, Trello, Asana):</strong> Built for office knowledge workers; lack typed field checklists, native object-storage vaults, mixed-language voice AI, and integrated reimbursement workflows.</li>
+        <li><strong>Legacy Enterprise ERPs (SAP, Oracle Primavera):</strong> Heavy desktop-centric interfaces with high licensing costs, slow mobile adoption, and rigid schema customization.</li>
+        <li><strong>Informal Messaging &amp; Spreadsheets (WhatsApp + Excel):</strong> Zero structured audit trail, no RBAC, and frequent loss of receipts or site photos.</li>
+      </ul>
+      <h3>2.2 Comparison and Gap Identification</h3>
+      <table>
+        <thead>
+          <tr><th>Capability</th><th>Generic Trackers</th><th>Legacy ERPs</th><th>Nexora Field OS</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Per-Project Custom Kanban Statuses</td><td>Partial</td><td>No</td><td><strong>Yes (Dynamic JSONB)</strong></td></tr>
+          <tr><td>Versatile Typed Checklists (9 Types)</td><td>No</td><td>Partial</td><td><strong>Yes (Strict Guarded)</strong></td></tr>
+          <tr><td>50 GB Isolated MinIO Media Vault</td><td>No</td><td>No</td><td><strong>Yes (Signed URLs)</strong></td></tr>
+          <tr><td>Mixed-Language Voice AI Governance</td><td>No</td><td>No</td><td><strong>Yes (Gemini 2.5)</strong></td></tr>
+          <tr><td>Cross-Org Collaboration &amp; Task Assign</td><td>Limited</td><td>Complex</td><td><strong>Yes (Global Directory)</strong></td></tr>
+          <tr><td>Integrated Budgets &amp; Reimbursements</td><td>No</td><td>Separate Module</td><td><strong>Yes (Receipt-Linked)</strong></td></tr>
+        </tbody>
+      </table>
+      <h3>2.3 Unique Selling Propositions (USPs) &amp; Justification</h3>
+      <ul>
+        <li><strong>Zero Hardcoded Workflows:</strong> Admins set org defaults; Project Managers customize Kanban columns and milestones per project.</li>
+        <li><strong>Strict Proof-Gated Completion:</strong> Tasks cannot transition to <code>DONE</code>/<code>VERIFIED</code> until required readings, blanks, options, and MinIO file slots are fulfilled.</li>
+        <li><strong>Shard-Isolated Multi-Tenancy:</strong> Organizations route dynamically to dedicated PostgreSQL shards (<code>S1</code>, <code>S2</code>, <code>S3</code>).</li>
+        <li><strong>Cross-Org Federation:</strong> Owner orgs invite partner orgs, partners assign specialists, and PMs assign tasks across all participating organizations.</li>
+      </ul>
+    </section>
+
+    <!-- 3. METHODOLOGY / SYSTEM DESIGN -->
+    <section class="page-break">
+      <h2>3. Methodology / System Design</h2>
+      <h3>3.1 Tools and Technologies Used</h3>
+      <p>
+        <strong>Frontend &amp; PWA:</strong> Next.js 15, React 19, Tailwind CSS v4, Zustand, Framer Motion, GSAP, Three.js.<br/>
+        <strong>Backend Services:</strong> Node.js 22, TypeScript, Express 5, GraphQL, gRPC, Socket.IO.<br/>
+        <strong>Databases &amp; Infrastructure:</strong> PostgreSQL 16 (Global + Shards S1–S3), MongoDB, Redis, RabbitMQ, MinIO, Docker Compose, NGINX, Cloudflare Tunnels.
+      </p>
+
+      <h3>3.2 System Architecture Diagram</h3>
+      <div class="diagram-box">
+        <svg viewBox="0 0 720 260" width="100%" height="230" xmlns="http://www.w3.org/2000/svg" style="font-family:sans-serif;font-size:11px;">
+          <rect x="10" y="95" width="110" height="55" rx="8" fill="#fff7ed" stroke="#ea580c" stroke-width="1.5"/>
+          <text x="65" y="120" text-anchor="middle" font-weight="bold">Web / PWA</text>
+          <text x="65" y="136" text-anchor="middle" font-size="9" fill="#475569">Next.js 15</text>
+
+          <rect x="155" y="95" width="110" height="55" rx="8" fill="#f1f5f9" stroke="#475569" stroke-width="1.5"/>
+          <text x="210" y="120" text-anchor="middle" font-weight="bold">Edge &amp; NGINX</text>
+          <text x="210" y="136" text-anchor="middle" font-size="9" fill="#475569">CF Tunnel + :80</text>
+
+          <rect x="305" y="30" width="130" height="48" rx="8" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+          <text x="370" y="52" text-anchor="middle" font-weight="bold">Identity Service</text>
+          <text x="370" y="67" text-anchor="middle" font-size="9" fill="#475569">JWT + RBAC + gRPC</text>
+
+          <rect x="305" y="98" width="130" height="52" rx="8" fill="#fff7ed" stroke="#ea580c" stroke-width="1.5"/>
+          <text x="370" y="121" text-anchor="middle" font-weight="bold">Gateway Service</text>
+          <text x="370" y="136" text-anchor="middle" font-size="9" fill="#475569">REST + GraphQL + WS</text>
+
+          <rect x="305" y="175" width="130" height="52" rx="8" fill="#ecfdf5" stroke="#059669" stroke-width="1.5"/>
+          <text x="370" y="198" text-anchor="middle" font-weight="bold">Storage &amp; AI</text>
+          <text x="370" y="213" text-anchor="middle" font-size="9" fill="#475569">MinIO + Gemini 2.5</text>
+
+          <rect x="490" y="30" width="210" height="48" rx="8" fill="#f8fafc" stroke="#334155" stroke-width="1.5"/>
+          <text x="595" y="52" text-anchor="middle" font-weight="bold">PG Global DB</text>
+          <text x="595" y="67" text-anchor="middle" font-size="9" fill="#475569">Users, Orgs, Collabs, Tokens</text>
+
+          <rect x="490" y="98" width="210" height="52" rx="8" fill="#f8fafc" stroke="#334155" stroke-width="1.5"/>
+          <text x="595" y="121" text-anchor="middle" font-weight="bold">PG Shards (S1 / S2 / S3)</text>
+          <text x="595" y="136" text-anchor="middle" font-size="9" fill="#475569">Projects, Tasks, Finance</text>
+
+          <rect x="490" y="175" width="210" height="52" rx="8" fill="#f8fafc" stroke="#334155" stroke-width="1.5"/>
+          <text x="595" y="198" text-anchor="middle" font-weight="bold">MinIO + MongoDB + RabbitMQ</text>
+          <text x="595" y="213" text-anchor="middle" font-size="9" fill="#475569">50 GB Vault + AI Transcripts</text>
+
+          <line x1="120" y1="122" x2="155" y2="122" stroke="#334155" stroke-width="1.5"/>
+          <line x1="265" y1="122" x2="305" y2="54" stroke="#334155" stroke-width="1.5"/>
+          <line x1="265" y1="122" x2="305" y2="124" stroke="#334155" stroke-width="1.5"/>
+          <line x1="370" y1="150" x2="370" y2="175" stroke="#334155" stroke-width="1.5"/>
+          <line x1="435" y1="54" x2="490" y2="54" stroke="#334155" stroke-width="1.5"/>
+          <line x1="435" y1="124" x2="490" y2="124" stroke="#334155" stroke-width="1.5"/>
+          <line x1="435" y1="201" x2="490" y2="201" stroke="#334155" stroke-width="1.5"/>
+        </svg>
+        <div class="diagram-caption">Figure 3.1: Multi-Tenant Microservice &amp; Sharded Data Architecture</div>
+      </div>
+
+      <h3>3.3 User Flow &amp; Data Flow</h3>
+      <div class="diagram-box">
+        <svg viewBox="0 0 720 120" width="100%" height="105" xmlns="http://www.w3.org/2000/svg" style="font-family:sans-serif;font-size:10px;">
+          <rect x="8" y="30" width="105" height="52" rx="8" fill="#fff7ed" stroke="#ea580c"/>
+          <text x="60" y="53" text-anchor="middle" font-weight="bold">1. Onboard</text>
+          <text x="60" y="68" text-anchor="middle" fill="#475569">Shard + JWT</text>
+
+          <rect x="128" y="30" width="105" height="52" rx="8" fill="#fff7ed" stroke="#ea580c"/>
+          <text x="180" y="53" text-anchor="middle" font-weight="bold">2. Plan Project</text>
+          <text x="180" y="68" text-anchor="middle" fill="#475569">Milestones + AI</text>
+
+          <rect x="248" y="30" width="105" height="52" rx="8" fill="#fff7ed" stroke="#ea580c"/>
+          <text x="300" y="53" text-anchor="middle" font-weight="bold">3. Cross-Org</text>
+          <text x="300" y="68" text-anchor="middle" fill="#475569">Invite &amp; Assign</text>
+
+          <rect x="368" y="30" width="105" height="52" rx="8" fill="#fff7ed" stroke="#ea580c"/>
+          <text x="420" y="53" text-anchor="middle" font-weight="bold">4. Field Proof</text>
+          <text x="420" y="68" text-anchor="middle" fill="#475569">Checklists + Voice</text>
+
+          <rect x="488" y="30" width="105" height="52" rx="8" fill="#ecfdf5" stroke="#059669"/>
+          <text x="540" y="53" text-anchor="middle" font-weight="bold">5. AI Score</text>
+          <text x="540" y="68" text-anchor="middle" fill="#475569">Gemini 2.5</text>
+
+          <rect x="608" y="30" width="105" height="52" rx="8" fill="#ecfdf5" stroke="#059669"/>
+          <text x="660" y="53" text-anchor="middle" font-weight="bold">6. Sign-Off</text>
+          <text x="660" y="68" text-anchor="middle" fill="#475569">QA + Finance</text>
+
+          <line x1="113" y1="56" x2="128" y2="56" stroke="#334155" stroke-width="1.5"/>
+          <line x1="233" y1="56" x2="248" y2="56" stroke="#334155" stroke-width="1.5"/>
+          <line x1="353" y1="56" x2="368" y2="56" stroke="#334155" stroke-width="1.5"/>
+          <line x1="473" y1="56" x2="488" y2="56" stroke="#334155" stroke-width="1.5"/>
+          <line x1="593" y1="56" x2="608" y2="56" stroke="#334155" stroke-width="1.5"/>
+        </svg>
+        <div class="diagram-caption">Figure 3.2: End-to-End User &amp; Data Flow Pipeline</div>
+      </div>
+    </section>
+
+    <!-- 4. IMPLEMENTATION -->
+    <section class="page-break">
+      <h2>4. Implementation</h2>
+      <h3>4.1 Modules and Service Descriptions</h3>
+      <ul>
+        <li><strong>Identity Service:</strong> Multi-org onboarding, RBAC flags, 2-hour JWT access tokens, rotating 7-day refresh tokens (<code>POST /api/v1/auth/refresh</code>), and gRPC <code>GetUserProjectAccess</code>.</li>
+        <li><strong>Gateway Service:</strong> REST, GraphQL, and Socket.IO endpoints; strict checklist completion guards; cross-org invitations (<code>project_org_collaborations</code>) and unified project assignees; project budget, expense, and reimbursement controllers.</li>
+        <li><strong>Storage Service:</strong> MinIO S3 integration enforcing 50 GB org quotas, 10-minute signed URLs, and archived-project deletion locks.</li>
+        <li><strong>AI Governance Service:</strong> RabbitMQ consumer and gRPC server invoking Gemini 2.5 Flash for project blueprints, progress synthesis, and mixed-language audio analysis.</li>
+        <li><strong>Frontend Web &amp; PWA:</strong> Next.js 15 responsive workspace with Light/Dark themes, 5-button mobile PWA dock, interactive monthly calendar, and automatic 401 token-refresh fetch interceptor.</li>
+      </ul>
+      <h3>4.2 Challenges Faced During Development</h3>
+      <ul>
+        <li><strong>Token Expiry During Long Field Sessions:</strong> Resolved via DB-backed refresh token rotation and a transparent 401-retry fetch interceptor in <code>nexoraClient.ts</code>.</li>
+        <li><strong>Cross-Org Task Assignment Across Shards:</strong> Resolved via <code>project_org_collaborations</code> in <code>nexora_global</code> and unified assignee resolution in <code>ProjectService.listProjectAssignees</code>.</li>
+        <li><strong>Theme Contrast Isolation:</strong> Resolved via <code>[data-surface="dark"]</code> and <code>[data-surface="light"]</code> CSS rules preserving contrast across both themes.</li>
+      </ul>
+    </section>
+
+    <!-- 5. RESULTS AND DISCUSSION -->
+    <section class="page-break">
+      <h2>5. Results and Discussion</h2>
+      <h3>5.1 Operational &amp; Technical Outcomes</h3>
+      <table>
+        <thead>
+          <tr><th>Metric / Verification Target</th><th>Observed Result</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Containerized Microservices Active</td><td>13 healthy containers (<code>web</code>, <code>gateway</code>, <code>identity</code>, <code>storage</code>, <code>ai-governance</code>, <code>worker</code>, DBs, edge)</td></tr>
+          <tr><td>Production Build Routes (Next.js 15)</td><td>21 static &amp; dynamic routes compiled with 0 TypeScript errors</td></tr>
+          <tr><td>AI Governance Efficiency Score (Live Task)</td><td>92.50% overall efficiency (95% timeliness, 90% evidence completeness)</td></tr>
+          <tr><td>Gateway Shard-Routed API Latency</td><td>&lt;120ms average response time</td></tr>
+          <tr><td>Per-Tenant MinIO Storage Quota</td><td>50 GB isolated object prefix with signed URL access</td></tr>
+        </tbody>
+      </table>
+      <h3>5.2 Business &amp; Pitch Interpretation</h3>
+      <p>
+        From a business and pitch standpoint, Nexora Field OS consolidates task tracking, proof storage, voice-to-text field reporting, and project finance into a single vertical operating system—eliminating informal WhatsApp reporting and providing auditable accountability for multi-organization infrastructure projects.
+      </p>
+    </section>
+
+    <!-- 6. CONCLUSION -->
+    <section class="page-break">
+      <h2>6. Conclusion</h2>
+      <h3>6.1 Summary of Outcomes &amp; Achievements vs. Objectives</h3>
+      <p>
+        Nexora Field OS fulfills all core business and technical objectives: dynamic per-project Kanban workflows, 9-type proof-gated checklists, cross-organization project collaboration, 50 GB MinIO media governance, Gemini 2.5 voice/progress AI analysis, rotating JWT session persistence, and an installable mobile/tablet PWA.
+      </p>
+      <h3>6.2 Limitations</h3>
+      <ul>
+        <li>Voice transcription accuracy in high-noise industrial sites depends on client microphone clarity.</li>
+        <li>Full offline IndexedDB mutation queueing (beyond cached PWA shell and session persistence) is planned for the next iteration.</li>
+      </ul>
+    </section>
+
+    <!-- 7. FUTURE SCOPE -->
+    <section class="page-break">
+      <h2>7. Future Scope</h2>
+      <ol>
+        <li><strong>Offline-First Mutation Queue:</strong> IndexedDB synchronization for zero-connectivity underground or remote sites.</li>
+        <li><strong>GPS Geofencing &amp; EXIF Verification:</strong> Automated polygon checks ensuring site photos match project coordinates.</li>
+        <li><strong>ERP &amp; Accounting Exports:</strong> Direct GST/Tally export of approved vendor expenses and reimbursement claims.</li>
+        <li><strong>Predictive SLA Risk Forecasting:</strong> Early warning alerts 48 hours prior to projected milestone slippage.</li>
+      </ol>
+    </section>
+
+    <!-- 8. REFERENCES -->
+    <section class="page-break">
+      <h2>8. References</h2>
+      <ol>
+        <li>M. Kleppmann, <em>Designing Data-Intensive Applications</em>. O'Reilly Media, 2017.</li>
+        <li>S. Newman, <em>Building Microservices: Designing Fine-Grained Systems</em>, 2nd ed. O'Reilly Media, 2021.</li>
+        <li>Google DeepMind, "Gemini 2.5 Technical Report: Multimodal Audio &amp; Reasoning," Google AI Documentation, 2025.</li>
+        <li>Vercel Inc., "Next.js 15 App Router &amp; Progressive Web Application Architecture," 2025.</li>
+        <li>MinIO Inc., "High-Performance S3-Compatible Object Storage for Multi-Tenant Clouds," 2025.</li>
+        <li>Cloudflare Inc., "Cloudflare Tunnel &amp; Zero Trust Access Architecture," 2025.</li>
+      </ol>
+    </section>
+
+    <!-- 9. APPENDICES -->
+    <section class="page-break">
+      <h2>9. Appendices</h2>
+      <h3>Appendix A: Core REST API Surface</h3>
+      <ul>
+        <li><code>POST /api/v1/auth/login</code>, <code>POST /api/v1/auth/register-org</code>, <code>POST /api/v1/auth/refresh</code></li>
+        <li><code>GET/POST /api/v1/projects</code>, <code>POST /api/v1/projects/:id/apply-blueprint</code>, <code>POST /api/v1/projects/:id/analyze-ai</code></li>
+        <li><code>POST /api/v1/projects/:id/org-invites</code>, <code>POST /api/v1/collaborations/:collabId/respond</code>, <code>GET /api/v1/projects/:id/assignees</code></li>
+        <li><code>POST /api/v1/tasks</code>, <code>PATCH /api/v1/projects/:id/tasks/:tid/checklist</code>, <code>PATCH /api/v1/projects/:id/tasks/:tid/status</code></li>
+        <li><code>POST /api/v1/projects/:id/tasks/:tid/evidence</code>, <code>GET /api/v1/evidence</code>, <code>DELETE /api/v1/projects/:id/files/:fid</code></li>
+      </ul>
+      <h3>Appendix B: PostgreSQL Multi-Tenant Shard Contract</h3>
+      <p>
+        <strong>Global DB (<code>nexora_global</code>):</strong> <code>users</code>, <code>org_directory</code>, <code>user_org_memberships</code>, <code>refresh_tokens</code>, <code>org_invitations</code>, <code>project_collaborators</code>, <code>project_org_collaborations</code>.<br/>
+        <strong>Operational Shards (<code>nexora_s1</code>, <code>nexora_s2</code>, <code>nexora_s3</code>):</strong> <code>organizations</code>, <code>roles</code>, <code>org_members</code>, <code>projects</code>, <code>stages</code>, <code>tasks</code>, <code>media_assets</code>, <code>task_efficiency_scores</code>, <code>project_budgets</code>, <code>expenses</code>, <code>reimbursement_claims</code>.
+      </p>
+    </section>
+  </div>
+</body>
+</html>

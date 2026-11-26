@@ -41,13 +41,13 @@ export function CountUpMetric({
       ref={elRef}
       className="glass-card rounded-2xl p-4 transition-transform duration-300 hover:-translate-y-1"
     >
-      <p className="font-display text-2xl sm:text-3xl font-bold tracking-tight tabular-nums text-[#111318]">
+      <p className="font-display text-2xl sm:text-3xl font-bold tracking-tight tabular-nums text-white">
         {prefix}
         {display}
-        <span className="text-orange-600">{suffix}</span>
+        <span className="text-orange-400">{suffix}</span>
       </p>
-      <p className="text-xs font-bold mt-1 text-[#111318]">{label}</p>
-      <p className="text-[11px] text-zinc-500 mt-0.5">{sublabel}</p>
+      <p className="text-xs font-bold mt-1 text-zinc-100">{label}</p>
+      <p className="text-[11px] text-zinc-300 mt-0.5">{sublabel}</p>
     </div>
   );
 }

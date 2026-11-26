@@ -62,6 +62,10 @@ export const AiService = {
     let base64Media: string | null = null;
     let audioTranscript = '';
     let detectedLanguages: string[] = [];
+    let aiSummary = '';
+    let evidenceScore = job.fileId ? 90 : job.textNote ? 65 : 20;
+    const timelinessScore = 95;
+    let riskFlags: string[] = job.fileId ? [] : ['MISSING_VISUAL_OR_AUDIO_EVIDENCE'];
 
     if (job.fileId) {
       try {
@@ -132,7 +136,16 @@ Return JSON strictly matching this schema:
           if (rawText) {
             const parsed = JSON.parse(rawText);
             audioTranscript = parsed.transcript || '';
-            detectedLanguages = parsed.identified_languages || [];
+            detectedLanguages = Array.isArray(parsed.identified_languages) ? parsed.identified_languages : [];
+            aiSummary = parsed.summary || '';
+            if (typeof parsed.evidence_completeness === 'number') {
+              evidenceScore = Math.max(0, Math.min(100, parsed.evidence_completeness));
+            } else if (typeof parsed.quality_score === 'number') {
+              evidenceScore = Math.max(0, Math.min(100, parsed.quality_score));
+            }
+            if (Array.isArray(parsed.risk_flags)) {
+              riskFlags = parsed.risk_flags.map((f: unknown) => String(f));
+            }
           }
         }
       } catch (aiErr) {
@@ -140,10 +153,7 @@ Return JSON strictly matching this schema:
       }
     }
 
-    const evidenceScore = job.fileId ? 90 : job.textNote ? 65 : 20;
-    const timelinessScore = 95;
     const overall = Number(((evidenceScore + timelinessScore) / 2).toFixed(2));
-    const riskFlags = job.fileId ? [] : ['MISSING_VISUAL_OR_AUDIO_EVIDENCE'];
 
     const pgPool = dataRouter.postgres.getPrimaryForOrg(job.orgId);
     const taskRes = await pgPool.query(`SELECT stage_id FROM tasks WHERE task_id = $1`, [job.taskId]);
@@ -183,6 +193,7 @@ Return JSON strictly matching this schema:
         mediaBytesAnalyzed: mediaSize,
         textNote: job.textNote,
         audioTranscript,
+        aiSummary,
         identifiedLanguages: detectedLanguages,
         overallEfficiency: overall,
         riskFlags,
@@ -201,7 +212,7 @@ Return JSON strictly matching this schema:
 
     const totalTasks = tasksRes.rows.length;
     const completedTasks = tasksRes.rows.filter(
-      (t) => t.status === 'COMPLETED' || t.status === 'VERIFIED' || t.status === 'SUBMITTED',
+      (t) => t.status === 'DONE' || t.status === 'COMPLETED' || t.status === 'VERIFIED' || t.status === 'SUBMITTED',
     ).length;
 
     let pendingChecklists = 0;

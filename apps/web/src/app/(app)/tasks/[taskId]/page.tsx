@@ -25,7 +25,17 @@ import { useWorkspaceAuth } from '@/hooks/useWorkspaceAuth';
 import { apiRequest } from '@/services/nexoraClient';
 import { VoiceRecorderInput } from '@/components/ui/VoiceRecorderInput';
 
-type ChecklistKind = 'CHECK' | 'TEXT' | 'FILE' | 'MEDIA' | 'LINK';
+type ChecklistKind =
+  | 'CHECK'
+  | 'FILL_BLANK'
+  | 'NUMBER'
+  | 'SHORT_ANSWER'
+  | 'OPTIONS'
+  | 'MULTI_SELECT'
+  | 'TEXT'
+  | 'FILE'
+  | 'MEDIA'
+  | 'LINK';
 
 interface ChecklistItem {
   id: string;
@@ -34,6 +44,10 @@ interface ChecklistItem {
   completed: boolean;
   required?: boolean;
   value?: string;
+  selectedOptions?: string[];
+  options?: string[];
+  unit?: string;
+  placeholder?: string;
   fileId?: string;
   fileName?: string;
 }
@@ -313,6 +327,110 @@ export default function TaskExecutionView() {
                     </span>
                   )}
                 </div>
+
+                {/* Fill in the blank or short answer */}
+                {(kind === 'FILL_BLANK' || kind === 'SHORT_ANSWER') && (
+                  <div className="pl-7">
+                    <input
+                      type="text"
+                      value={item.value || ''}
+                      onChange={(e) => {
+                        const updated = task.checklist.map((c: ChecklistItem, i: number) =>
+                          i === idx ? { ...c, value: e.target.value } : c
+                        );
+                        setTask((prev: any) => ({ ...prev, checklist: updated }));
+                      }}
+                      onBlur={() => void saveChecklist(task.checklist)}
+                      placeholder={kind === 'FILL_BLANK' ? 'Fill in the blank value...' : 'Short answer...'}
+                      className="w-full rounded-lg border border-white/[0.08] bg-[#121215] px-2.5 py-1.5 text-xs text-white outline-none focus:border-orange-500"
+                    />
+                  </div>
+                )}
+
+                {/* Number with unit */}
+                {kind === 'NUMBER' && (
+                  <div className="flex items-center gap-2 pl-7">
+                    <input
+                      type="number"
+                      step="any"
+                      value={item.value || ''}
+                      onChange={(e) => {
+                        const updated = task.checklist.map((c: ChecklistItem, i: number) =>
+                          i === idx ? { ...c, value: e.target.value } : c
+                        );
+                        setTask((prev: any) => ({ ...prev, checklist: updated }));
+                      }}
+                      onBlur={() => void saveChecklist(task.checklist)}
+                      placeholder="0.00"
+                      className="w-36 rounded-lg border border-white/[0.08] bg-[#121215] px-2.5 py-1.5 font-mono text-xs text-white outline-none focus:border-orange-500"
+                    />
+                    {item.unit && (
+                      <span className="font-mono text-xs text-zinc-400 font-semibold">{item.unit}</span>
+                    )}
+                  </div>
+                )}
+
+                {/* Single selection options */}
+                {kind === 'OPTIONS' && (
+                  <div className="flex flex-wrap gap-1.5 pl-7">
+                    {(item.options || ['Pass', 'Fail', 'N/A']).map((opt) => {
+                      const selected = item.value === opt;
+                      return (
+                        <button
+                          key={opt}
+                          type="button"
+                          onClick={() => {
+                            const updated = task.checklist.map((c: ChecklistItem, i: number) =>
+                              i === idx ? { ...c, value: opt, completed: Boolean(opt) } : c
+                            );
+                            setTask((prev: any) => ({ ...prev, checklist: updated }));
+                            void saveChecklist(updated);
+                          }}
+                          className={`rounded-lg px-2.5 py-1 text-xs font-medium border transition-colors cursor-pointer ${
+                            selected
+                              ? 'border-orange-500 bg-orange-500/20 text-white font-semibold'
+                              : 'border-white/[0.06] bg-[#121215] text-zinc-400 hover:text-white'
+                          }`}
+                        >
+                          {opt}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Multi-select options */}
+                {kind === 'MULTI_SELECT' && (
+                  <div className="flex flex-wrap gap-1.5 pl-7">
+                    {(item.options || ['Item A', 'Item B', 'Item C']).map((opt) => {
+                      const list = Array.isArray(item.selectedOptions) ? item.selectedOptions : [];
+                      const isChecked = list.includes(opt);
+                      return (
+                        <button
+                          key={opt}
+                          type="button"
+                          onClick={() => {
+                            const updatedList = isChecked ? list.filter((x) => x !== opt) : [...list, opt];
+                            const updated = task.checklist.map((c: ChecklistItem, i: number) =>
+                              i === idx
+                                ? { ...c, selectedOptions: updatedList, value: updatedList.join(', '), completed: updatedList.length > 0 }
+                                : c
+                            );
+                            setTask((prev: any) => ({ ...prev, checklist: updated }));
+                            void saveChecklist(updated);
+                          }}
+                          className={`rounded-lg px-2.5 py-1 text-xs font-medium border transition-colors cursor-pointer ${
+                            isChecked
+                              ? 'border-emerald-500 bg-emerald-500/20 text-emerald-200 font-semibold'
+                              : 'border-white/[0.06] bg-[#121215] text-zinc-400 hover:text-white'
+                          }`}
+                        >
+                          {isChecked ? '✓ ' : '+ '} {opt}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
 
                 {(kind === 'TEXT' || kind === 'LINK') && (
                   <div className="pl-7">

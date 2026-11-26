@@ -55,7 +55,7 @@ export const FinanceService = {
       pool.query(
         `SELECT COUNT(*)::int AS pending_count,
                 COALESCE(SUM(amount_paise), 0)::bigint AS pending_amount
-         FROM reimbursement_claims WHERE org_id = $1 AND status = 'SUBMITTED'`,
+         FROM reimbursement_claims WHERE org_id = $1 AND status IN ('SUBMITTED', 'PENDING')`,
         [auth.activeOrgId],
       ),
     ]);
@@ -139,6 +139,19 @@ export const FinanceService = {
     }
 
     return { projectId: body.projectId, totalBudgetPaise: total, distributedBudgetPaise: distributed, floatedBudgetPaise: floated };
+  },
+
+  async listBudgetRevisions(auth: AuthContext, projectId: string) {
+    const pool = dataRouter.postgres.getReadPool(auth.shardId, true);
+    const res = await pool.query(
+      `SELECT revision_id, project_id, previous_total_paise, new_total_paise, reason, revised_by, created_at
+       FROM budget_revisions
+       WHERE org_id = $1 AND project_id = $2
+       ORDER BY created_at DESC
+       LIMIT 20`,
+      [auth.activeOrgId, projectId],
+    );
+    return res.rows;
   },
 
   async listExpenses(auth: AuthContext, projectId?: string) {

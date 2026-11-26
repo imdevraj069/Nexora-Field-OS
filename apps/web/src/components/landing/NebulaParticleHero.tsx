@@ -73,10 +73,10 @@ function NebulaField() {
           />
         </bufferGeometry>
         <pointsMaterial
-          size={0.042}
+          size={0.032}
           vertexColors
           transparent
-          opacity={0.85}
+          opacity={0.6}
           sizeAttenuation
           depthWrite={false}
           blending={THREE.AdditiveBlending}
@@ -107,7 +107,7 @@ export function NebulaParticleHero() {
       <Canvas camera={{ position: [0, 1.4, 6.2], fov: 48 }} dpr={[1, 1.75]}>
         <NebulaField />
       </Canvas>
-      <div className="absolute inset-0 bg-gradient-to-b from-[#05060a]/30 via-transparent to-[#05060a]" />
+      <div className="absolute inset-0 bg-gradient-to-b from-[#05060a]/60 via-[#05060a]/20 to-[#05060a]" />
     </div>
   );
 }

@@ -34,7 +34,10 @@ services:
     image: cloudflare/cloudflared:latest
     container_name: nexora-cloudflared
     restart: unless-stopped
-    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    command: tunnel --no-autoupdate --config /etc/cloudflared/config.yml run
+    volumes:
+      - ./configs/cloudflared/config.yml:/etc/cloudflared/config.yml:ro
+      - ./configs/cloudflared/9b464331-e4e0-458e-a603-9527a2467a77.json:/etc/cloudflared/9b464331-e4e0-458e-a603-9527a2467a77.json:ro
     depends_on:
       nginx:
         condition: service_healthy

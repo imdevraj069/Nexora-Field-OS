@@ -44,6 +44,7 @@ router.patch('/projects/:projectId/tasks/:taskId', authMiddleware, asyncHandler(
 router.patch('/projects/:projectId/tasks/:taskId/status', authMiddleware, asyncHandler(GatewayController.updateTaskStatus));
 router.patch('/projects/:projectId/tasks/:taskId/checklist', authMiddleware, asyncHandler(GatewayController.updateChecklist));
 router.post('/projects/:projectId/analyze-ai', authMiddleware, asyncHandler(GatewayController.analyzeProjectProgress));
+router.get('/projects/:projectId/tasks/:taskId/ai-insights', authMiddleware, asyncHandler(GatewayController.getTaskAiInsights));
 router.post(
   '/projects/:projectId/tasks/:taskId/evidence',
   authMiddleware,
@@ -61,6 +62,7 @@ router.get('/inbox', authMiddleware, asyncHandler(GatewayController.getInbox));
 router.get('/finance/overview', authMiddleware, asyncHandler(GatewayController.getFinanceOverview));
 router.get('/finance/budgets', authMiddleware, asyncHandler(GatewayController.listBudgets));
 router.post('/finance/budgets', authMiddleware, asyncHandler(GatewayController.upsertBudget));
+router.get('/finance/budgets/:projectId/revisions', authMiddleware, asyncHandler(GatewayController.listBudgetRevisions));
 router.get('/finance/expenses', authMiddleware, asyncHandler(GatewayController.listExpenses));
 router.post('/finance/expenses', authMiddleware, upload.single('receipt'), asyncHandler(GatewayController.createExpense));
 router.patch('/finance/expenses/:expenseId/pay', authMiddleware, asyncHandler(GatewayController.markExpensePaid));

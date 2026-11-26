@@ -59,13 +59,13 @@ export function WhyUsComparison() {
         transition={{ duration: 0.5 }}
         className="text-center max-w-2xl mx-auto mb-12"
       >
-        <span className="inline-flex items-center gap-2 rounded-full bg-orange-500/10 px-3.5 py-1 text-xs font-bold text-orange-600">
+        <span className="inline-flex items-center gap-2 rounded-full bg-orange-500/15 px-3.5 py-1 text-xs font-bold text-orange-400 border border-orange-500/25">
           Why Nexora Field OS
         </span>
-        <h2 className="font-display text-3xl sm:text-4xl font-bold tracking-tight mt-3 text-[#111318]">
+        <h2 className="landing-h2 font-display text-3xl sm:text-4xl font-bold tracking-tight mt-3 text-white">
           Purpose-Built vs. Generic Trackers
         </h2>
-        <p className="text-sm sm:text-base text-zinc-600 mt-2">
+        <p className="landing-sub text-sm sm:text-base text-zinc-300 mt-2">
           Stop duct-taping spreadsheets, WhatsApp photos, and rigid office task boards together.
         </p>
       </motion.div>
@@ -79,17 +79,17 @@ export function WhyUsComparison() {
       >
         <table className="w-full text-left border-collapse min-w-[600px]">
           <thead>
-            <tr className="border-b border-zinc-200/70 text-xs font-bold uppercase tracking-wider text-zinc-500">
+            <tr className="landing-table-head border-b border-white/[0.1] text-xs font-bold uppercase tracking-wider text-zinc-300">
               <th className="py-4 px-6">Capability</th>
-              <th className="py-4 px-6 text-orange-600">Nexora Field OS</th>
+              <th className="py-4 px-6 text-orange-400 font-bold">Nexora Field OS</th>
               <th className="py-4 px-6">Generic Task Apps</th>
               <th className="py-4 px-6">Legacy ERP</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-200/60 text-sm">
+          <tbody className="divide-y divide-white/[0.06] text-sm">
             {ROWS.map((r) => (
               <tr key={r.feature} className="hover:bg-orange-500/[0.04] transition-colors">
-                <td className="py-3.5 px-6 font-semibold text-[#111318]">{r.feature}</td>
+                <td className="landing-table-row py-3.5 px-6 font-semibold">{r.feature}</td>
                 <td className="py-3.5 px-6">
                   <CheckCircle2 className="w-5 h-5 text-emerald-600" />
                 </td>
@@ -97,14 +97,14 @@ export function WhyUsComparison() {
                   {r.generic ? (
                     <CheckCircle2 className="w-5 h-5 text-zinc-400" />
                   ) : (
-                    <MinusCircle className="w-5 h-5 text-zinc-300" />
+                    <MinusCircle className="w-5 h-5 text-zinc-400" />
                   )}
                 </td>
                 <td className="py-3.5 px-6">
                   {r.legacy ? (
                     <CheckCircle2 className="w-5 h-5 text-zinc-400" />
                   ) : (
-                    <MinusCircle className="w-5 h-5 text-zinc-300" />
+                    <MinusCircle className="w-5 h-5 text-zinc-400" />
                   )}
                 </td>
               </tr>

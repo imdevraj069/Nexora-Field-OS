@@ -1,5 +1,6 @@
 @import url("https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
+@import "./globals-landing-theme.css";
 
 @theme {
   --font-display: "Outfit", "Plus Jakarta Sans", "SF Pro Rounded", ui-rounded, system-ui, sans-serif;
@@ -270,4 +271,161 @@ html[data-theme="dark"] .text-red-600 {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* ==========================================================
+   LANDING PAGE THEME — appended directly for Tailwind 4 compat
+   Dark = default, light = html[data-theme="light"] overrides
+   data-surface="dark" containers always stay dark-on-dark
+   ========================================================== */
+
+/* ── DARK DEFAULT (always applied to landing root) ────────── */
+[data-landing] {
+  background-color: #05060a;
+  color: #f4f4f5;
+  transition: background-color 0.3s ease, color 0.25s ease;
+}
+
+/* ── LIGHT OVERRIDES ──────────────────────────────────────── */
+html[data-theme="light"] [data-landing] {
+  background-color: #f0f1f5;
+  color: #111318;
+}
+
+/* Navbar */
+html[data-theme="light"] [data-landing] header {
+  background-color: rgba(240, 241, 245, 0.88) !important;
+  border-bottom-color: rgba(15, 23, 42, 0.1) !important;
+}
+
+/* Nav links */
+html[data-theme="light"] [data-landing] nav a {
+  color: #374151 !important;
+}
+html[data-theme="light"] [data-landing] nav a:hover {
+  color: #111318 !important;
+}
+
+/* Logo brand name */
+html[data-theme="light"] [data-landing] .landing-brand {
+  color: #111318 !important;
+}
+
+/* Ghost buttons in navbar + hero */
+html[data-theme="light"] [data-landing] .landing-btn-ghost {
+  color: #374151 !important;
+  border-color: rgba(0, 0, 0, 0.14) !important;
+  background-color: rgba(0, 0, 0, 0.04) !important;
+}
+html[data-theme="light"] [data-landing] .landing-btn-ghost:hover {
+  background-color: rgba(0, 0, 0, 0.09) !important;
+  color: #111318 !important;
+}
+
+/* Hero H1 */
+html[data-theme="light"] [data-landing] .landing-h1 {
+  color: #0d0f14 !important;
+  text-shadow: none !important;
+  -webkit-text-stroke: unset;
+}
+
+/* Hero subtitle */
+html[data-theme="light"] [data-landing] .landing-sub {
+  color: #374151 !important;
+  text-shadow: none !important;
+}
+
+/* Section eyebrow labels */
+html[data-theme="light"] [data-landing] .landing-label {
+  color: #6b7280 !important;
+}
+
+/* Headings in sections */
+html[data-theme="light"] [data-landing] .landing-h2 {
+  color: #111318 !important;
+}
+
+/* Body copy in sections */
+html[data-theme="light"] [data-landing] .landing-body {
+  color: #374151 !important;
+}
+
+/* Bullet + highlight list items */
+html[data-theme="light"] [data-landing] .landing-bullet-item {
+  color: #111318 !important;
+}
+
+/* Stepper inactive steps */
+html[data-theme="light"] [data-landing] .landing-step-inactive {
+  color: #374151 !important;
+}
+html[data-theme="light"] [data-landing] .landing-step-inactive:hover {
+  background-color: rgba(0, 0, 0, 0.03) !important;
+}
+html[data-theme="light"] [data-landing] .landing-step-title-inactive {
+  color: #111318 !important;
+}
+html[data-theme="light"] [data-landing] .landing-step-desc {
+  color: #4b5563 !important;
+}
+
+/* Table & FAQ */
+html[data-theme="light"] [data-landing] .landing-table-head {
+  color: #374151 !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+}
+html[data-theme="light"] [data-landing] .landing-table-row {
+  color: #111318 !important;
+}
+html[data-theme="light"] [data-landing] .landing-faq-q {
+  color: #111318 !important;
+}
+html[data-theme="light"] [data-landing] .landing-faq-a {
+  color: #374151 !important;
+}
+
+/* glass-card in landing (FAQ, Comparison) */
+html[data-theme="light"] [data-landing] .glass-card {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+  border-color: rgba(15, 23, 42, 0.1) !important;
+  color: #111318 !important;
+  box-shadow: 0 1px 3px rgba(15,23,42,0.06), 0 10px 24px -12px rgba(15,23,42,0.1) !important;
+}
+
+/* Closing CTA + Footer */
+html[data-theme="light"] [data-landing] .landing-footer {
+  color: #6b7280 !important;
+  border-color: rgba(0,0,0,0.1) !important;
+}
+
+/* Nebula BG — nearly invisible in light mode */
+html[data-theme="light"] [data-landing] .nebula-canvas {
+  opacity: 0.06 !important;
+}
+
+/* Capability switcher pill container */
+html[data-theme="light"] [data-landing] .cap-pill-wrap {
+  background-color: rgba(0,0,0,0.05) !important;
+  border-color: rgba(0,0,0,0.1) !important;
+}
+html[data-theme="light"] [data-landing] .cap-pill-inactive {
+  color: #374151 !important;
+}
+html[data-theme="light"] [data-landing] .cap-pill-inactive:hover {
+  background-color: rgba(0,0,0,0.06) !important;
+  color: #111318 !important;
+}
+
+/* ==========================================================
+   data-surface="dark" containers — NEVER change regardless of theme
+   These are mockup frames, bento cards, stats strip, etc.
+   ========================================================== */
+[data-surface="dark"],
+html[data-theme="light"] [data-landing] [data-surface="dark"] {
+  background-color: initial; /* keep whatever the component sets */
+  color: #f4f4f5;
+}
+html[data-theme="light"] [data-landing] [data-surface="dark"] * {
+  /* don't clobber children — the [data-surface="dark"] wrapper text is already white */
+  color: inherit;
 }

@@ -7,7 +7,17 @@ import { apiRequest } from '@/services/nexoraClient';
 import { useWorkspaceAuth } from '@/hooks/useWorkspaceAuth';
 import { MARLO_EASE } from '@/components/ui/motion';
 
-type ChecklistKind = 'CHECK' | 'TEXT' | 'FILE' | 'MEDIA' | 'LINK';
+type ChecklistKind =
+  | 'CHECK'
+  | 'FILL_BLANK'
+  | 'NUMBER'
+  | 'SHORT_ANSWER'
+  | 'OPTIONS'
+  | 'MULTI_SELECT'
+  | 'TEXT'
+  | 'FILE'
+  | 'MEDIA'
+  | 'LINK';
 
 interface ChecklistDraft {
   id: string;
@@ -15,6 +25,9 @@ interface ChecklistDraft {
   kind: ChecklistKind;
   required: boolean;
   completed: boolean;
+  options?: string[];
+  placeholder?: string;
+  unit?: string;
 }
 
 interface FileSlotDraft {
@@ -69,6 +82,8 @@ export function TaskCreateModal({
   ]);
   const [newCheckLabel, setNewCheckLabel] = useState('');
   const [newCheckKind, setNewCheckKind] = useState<ChecklistKind>('CHECK');
+  const [newCheckOptions, setNewCheckOptions] = useState('');
+  const [newCheckUnit, setNewCheckUnit] = useState('');
 
   const [fileSlots, setFileSlots] = useState<FileSlotDraft[]>([]);
   const [newSlotHeader, setNewSlotHeader] = useState('');
@@ -103,6 +118,10 @@ export function TaskCreateModal({
 
   function addChecklistLine() {
     if (!newCheckLabel.trim()) return;
+    const opts = (newCheckKind === 'OPTIONS' || newCheckKind === 'MULTI_SELECT')
+      ? newCheckOptions.split(',').map((s) => s.trim()).filter(Boolean)
+      : undefined;
+
     setChecklistItems([
       ...checklistItems,
       {
@@ -111,9 +130,13 @@ export function TaskCreateModal({
         kind: newCheckKind,
         required: true,
         completed: false,
+        options: opts && opts.length > 0 ? opts : (newCheckKind === 'OPTIONS' || newCheckKind === 'MULTI_SELECT' ? ['Pass', 'Fail', 'N/A'] : undefined),
+        unit: newCheckKind === 'NUMBER' ? newCheckUnit.trim() || undefined : undefined,
       },
     ]);
     setNewCheckLabel('');
+    setNewCheckOptions('');
+    setNewCheckUnit('');
   }
 
   function addFileSlot() {
@@ -298,7 +321,7 @@ export function TaskCreateModal({
                   type="text"
                   value={newCheckLabel}
                   onChange={(e) => setNewCheckLabel(e.target.value)}
-                  placeholder="Checklist step..."
+                  placeholder="Checklist step / prompt / question..."
                   className="flex-1 min-w-[160px] rounded-xl border border-white/[0.08] bg-[#121215] px-3 py-1.5 text-xs text-white placeholder-zinc-500 outline-none focus:border-orange-500"
                 />
                 <select
@@ -306,12 +329,35 @@ export function TaskCreateModal({
                   onChange={(e) => setNewCheckKind(e.target.value as ChecklistKind)}
                   className="rounded-xl border border-white/[0.08] bg-[#121215] px-2.5 py-1.5 font-mono text-[11px] text-orange-300 outline-none"
                 >
-                  <option value="CHECK">Normal Check</option>
-                  <option value="TEXT">Text Input</option>
-                  <option value="FILE">File Upload</option>
-                  <option value="MEDIA">Media (Photo/Vid/Audio)</option>
-                  <option value="LINK">Link / URL</option>
+                  <option value="CHECK">☑️ Checkbox</option>
+                  <option value="FILL_BLANK">📝 Fill in Blank</option>
+                  <option value="NUMBER">🔢 Numeric Value</option>
+                  <option value="SHORT_ANSWER">💬 Short Answer</option>
+                  <option value="OPTIONS">🔘 Single Select (Option)</option>
+                  <option value="MULTI_SELECT">☑️ Multi Select</option>
+                  <option value="TEXT">📄 Long Text</option>
+                  <option value="FILE">📁 Document/File</option>
+                  <option value="MEDIA">📸 Photo/Video/Audio</option>
+                  <option value="LINK">🔗 URL Link</option>
                 </select>
+                {(newCheckKind === 'OPTIONS' || newCheckKind === 'MULTI_SELECT') && (
+                  <input
+                    type="text"
+                    value={newCheckOptions}
+                    onChange={(e) => setNewCheckOptions(e.target.value)}
+                    placeholder="Choices (comma separated: Yes, No, Repair)..."
+                    className="w-full sm:w-60 rounded-xl border border-white/[0.08] bg-[#121215] px-3 py-1.5 text-xs text-white placeholder-zinc-500 outline-none focus:border-orange-500"
+                  />
+                )}
+                {newCheckKind === 'NUMBER' && (
+                  <input
+                    type="text"
+                    value={newCheckUnit}
+                    onChange={(e) => setNewCheckUnit(e.target.value)}
+                    placeholder="Unit (e.g. °C, PSI, mm, kg)..."
+                    className="w-28 rounded-xl border border-white/[0.08] bg-[#121215] px-3 py-1.5 text-xs text-white placeholder-zinc-500 outline-none focus:border-orange-500"
+                  />
+                )}
                 <button
                   type="button"
                   onClick={addChecklistLine}

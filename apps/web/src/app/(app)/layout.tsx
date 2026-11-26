@@ -151,9 +151,7 @@ function WorkspaceShell({ children }: { children: React.ReactNode }) {
       >
         <div className="flex items-center justify-between gap-2 px-4 py-4 border-b border-white/[0.06]">
           <Link href="/" className="flex items-center gap-2.5 min-w-0">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-red-600/20 via-orange-500/20 to-amber-500/10 border border-orange-500/30">
-              <NexoraMark className="h-5 w-5 text-orange-400" />
-            </div>
+            <img src="/icon.svg" alt="Nexora" className="h-9 w-9 shrink-0 rounded-xl shadow-md shadow-orange-500/20" />
             {!railMode && (
               <div className="min-w-0">
                 <p className="font-display text-sm font-bold text-white leading-tight truncate">Nexora</p>

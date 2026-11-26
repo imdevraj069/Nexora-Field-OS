@@ -5,6 +5,11 @@ export async function startAiJobsConsumer(): Promise<void> {
   if (!process.env.RABBITMQ_URL) return;
   try {
     const conn = await amqplib.connect(process.env.RABBITMQ_URL);
+    conn.on('error', () => {});
+    conn.on('close', () => {
+      console.warn('[ai-governance-service] RabbitMQ connection closed, retrying in 5s...');
+      setTimeout(() => void startAiJobsConsumer(), 5000);
+    });
     const channel = await conn.createChannel();
     await channel.assertQueue('ai_jobs', { durable: true });
     await channel.prefetch(5);
@@ -20,6 +25,7 @@ export async function startAiJobsConsumer(): Promise<void> {
     });
     console.log('[ai-governance-service] Listening on ai_jobs queue...');
   } catch (err) {
-    console.warn('[ai-governance-service] RabbitMQ unavailable:', (err as Error).message);
+    console.warn('[ai-governance-service] RabbitMQ unavailable, retrying in 5s:', (err as Error).message);
+    setTimeout(() => void startAiJobsConsumer(), 5000);
   }
 }

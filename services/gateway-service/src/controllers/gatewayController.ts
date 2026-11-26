@@ -178,6 +178,14 @@ export const GatewayController = {
     const result = await ProjectService.analyzeProjectProgress(req.auth!, String(req.params.projectId));
     res.json(result);
   },
+  getTaskAiInsights: async (req: AuthedRequest, res: Response) => {
+    const insights = await ProjectService.getTaskAiInsights(
+      req.auth!,
+      String(req.params.projectId),
+      String(req.params.taskId),
+    );
+    res.json(insights);
+  },
   submitEvidence: async (req: AuthedRequest, res: Response) => {
     const result = await ProjectService.submitEvidence(
       req.auth!,
@@ -234,6 +242,10 @@ export const GatewayController = {
   upsertBudget: async (req: AuthedRequest, res: Response) => {
     const budget = await FinanceService.upsertBudget(req.auth!, req.body);
     res.status(201).json({ budget });
+  },
+  listBudgetRevisions: async (req: AuthedRequest, res: Response) => {
+    const revisions = await FinanceService.listBudgetRevisions(req.auth!, String(req.params.projectId));
+    res.json({ revisions });
   },
   listExpenses: async (req: AuthedRequest, res: Response) => {
     const expenses = await FinanceService.listExpenses(

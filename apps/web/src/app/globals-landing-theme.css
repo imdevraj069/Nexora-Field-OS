@@ -1,0 +1,135 @@
+/* ==========================================================
+   LANDING PAGE THEME SYSTEM
+   Dark mode = base (always applied via data-landing root)
+   Light mode = overrides via html[data-theme="light"]
+   data-surface="dark" on mockup containers = always dark,
+   text inside them stays white regardless of theme.
+   ========================================================== */
+
+/* ── DARK MODE BASE (defaults, also the dark theme) ───────── */
+[data-landing] {
+  background-color: #05060a;
+  color: #f4f4f5;
+  transition: background-color 0.3s ease, color 0.25s ease;
+}
+
+[data-landing] .landing-header {
+  background-color: rgba(5, 6, 10, 0.85);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+[data-landing] .landing-brand-text   { color: #ffffff; }
+[data-landing] .landing-nav-link     { color: #e4e4e7; }
+[data-landing] .landing-nav-link:hover { color: #ffffff; }
+[data-landing] .landing-ghost-btn    { color: #e4e4e7; border-color: rgba(255,255,255,0.1); background-color: rgba(255,255,255,0.04); }
+[data-landing] .landing-ghost-btn:hover { background-color: rgba(255,255,255,0.09); color: #fff; }
+
+[data-landing] .landing-h1          { color: #ffffff; }
+[data-landing] .landing-h2          { color: #ffffff; }
+[data-landing] .landing-subtitle    { color: #d4d4d8; }
+[data-landing] .landing-section-label { color: #a1a1aa; }
+
+[data-landing] .landing-step-title  { color: #d4d4d8; }
+[data-landing] .landing-step-desc   { color: #a1a1aa; }
+[data-landing] .landing-step-inactive { color: #a1a1aa; }
+[data-landing] .landing-step-inactive:hover { background-color: rgba(255,255,255,0.03); }
+
+[data-landing] .landing-table-header { color: #d4d4d8; border-color: rgba(255,255,255,0.1); }
+[data-landing] .landing-table-cell   { color: #f4f4f5; }
+[data-landing] .landing-faq-q        { color: #ffffff; }
+[data-landing] .landing-faq-a        { color: #d4d4d8; }
+[data-landing] .landing-footer       { color: #71717a; border-color: rgba(255,255,255,0.08); }
+
+/* ── LIGHT MODE OVERRIDES ─────────────────────────────────── */
+html[data-theme="light"] [data-landing] {
+  background-color: #f4f5f8;
+  color: #111318;
+}
+
+html[data-theme="light"] [data-landing] .landing-header {
+  background-color: rgba(244, 245, 248, 0.90);
+  border-color: rgba(15, 23, 42, 0.09);
+  backdrop-filter: blur(20px) saturate(1.4);
+}
+
+html[data-theme="light"] [data-landing] .landing-brand-text   { color: #111318; }
+html[data-theme="light"] [data-landing] .landing-nav-link     { color: #374151; }
+html[data-theme="light"] [data-landing] .landing-nav-link:hover { color: #111318; }
+html[data-theme="light"] [data-landing] .landing-ghost-btn    { color: #374151; border-color: rgba(0,0,0,0.12); background-color: rgba(0,0,0,0.04); }
+html[data-theme="light"] [data-landing] .landing-ghost-btn:hover { background-color: rgba(0,0,0,0.08); color: #111318; }
+
+html[data-theme="light"] [data-landing] .landing-h1          { color: #0d0f14; text-shadow: none; }
+html[data-theme="light"] [data-landing] .landing-h2          { color: #111318; }
+html[data-theme="light"] [data-landing] .landing-subtitle    { color: #374151; text-shadow: none; }
+html[data-theme="light"] [data-landing] .landing-section-label { color: #6b7280; }
+
+html[data-theme="light"] [data-landing] .landing-step-title  { color: #111318; }
+html[data-theme="light"] [data-landing] .landing-step-desc   { color: #4b5563; }
+html[data-theme="light"] [data-landing] .landing-step-inactive { color: #4b5563; }
+html[data-theme="light"] [data-landing] .landing-step-inactive:hover { background-color: rgba(0,0,0,0.03); }
+
+html[data-theme="light"] [data-landing] .landing-table-header { color: #374151; border-color: rgba(0,0,0,0.1); }
+html[data-theme="light"] [data-landing] .landing-table-cell   { color: #111318; }
+html[data-theme="light"] [data-landing] .landing-faq-q        { color: #111318; }
+html[data-theme="light"] [data-landing] .landing-faq-a        { color: #374151; }
+html[data-theme="light"] [data-landing] .landing-footer       { color: #6b7280; border-color: rgba(0,0,0,0.1); }
+
+/* Light mode capability switcher section background */
+html[data-theme="light"] [data-landing] section,
+html[data-theme="light"] [data-landing] > div > section {
+  background-color: transparent;
+}
+
+/* Stats strip — always dark, never touched */
+[data-landing] [data-surface="dark"],
+html[data-theme="light"] [data-landing] [data-surface="dark"] {
+  /* force dark bg & text — overrides any parent light theme  */
+  background-color: #0c0d12;
+  color: #f4f4f5;
+}
+
+/* Light mode: nebula particle canvas — reduce brightness dramatically */
+html[data-theme="light"] [data-landing] .landing-nebula-canvas {
+  opacity: 0.08 !important;
+}
+
+/* Light mode: glass cards (FAQ, Comparison) on light bg */
+html[data-theme="light"] [data-landing] .glass-card {
+  background-color: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  color: #111318;
+  box-shadow: 0 1px 3px rgba(15,23,42,0.06), 0 10px 24px -12px rgba(15,23,42,0.12);
+}
+
+/* Light mode: capability switcher section bg */
+html[data-theme="light"] [data-landing] .capability-section-bg {
+  background-color: #eef0f4;
+}
+
+/* CTA ghost button in hero — light mode border fix */
+html[data-theme="light"] [data-landing] .landing-cta-ghost {
+  color: #374151;
+  border-color: rgba(0,0,0,0.14);
+  background-color: rgba(0,0,0,0.04);
+}
+html[data-theme="light"] [data-landing] .landing-cta-ghost:hover {
+  background-color: rgba(0,0,0,0.08);
+  color: #111318;
+}
+
+/* Journey stepper — light mode step active */
+html[data-theme="light"] [data-landing] .journey-step-active {
+  background-color: #fff7f4;
+  border-color: rgba(249, 115, 22, 0.4);
+}
+
+/* Table dividers in comparison */
+html[data-theme="light"] [data-landing] table tbody { 
+  divide-color: rgba(0,0,0,0.07);
+}
+html[data-theme="light"] [data-landing] table tr {
+  border-color: rgba(0,0,0,0.07);
+}
+html[data-theme="light"] [data-landing] table tr:hover {
+  background-color: rgba(249,115,22,0.04);
+}

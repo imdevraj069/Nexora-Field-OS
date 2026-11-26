@@ -1,0 +1,7 @@
+tunnel: 9b464331-e4e0-458e-a603-9527a2467a77
+credentials-file: /etc/cloudflared/9b464331-e4e0-458e-a603-9527a2467a77.json
+
+ingress:
+  - hostname: nexora.imdevraj.com
+    service: http://nginx:80
+  - service: http_status:404

@@ -117,7 +117,7 @@ export function ProjectCreateModal({ isOpen, onClose, onSuccess }: ProjectCreate
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.96, y: 12 }}
           transition={{ duration: 0.28, ease: MARLO_EASE }}
-          className="relative w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-[26px] border border-white/[0.08] bg-[#141417] p-6 shadow-2xl"
+          className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-[26px] border border-white/[0.08] bg-[#141417] p-6 shadow-2xl"
         >
           <div className="flex items-center justify-between border-b border-white/[0.06] pb-4 mb-5">
             <div className="flex items-center gap-2.5">
@@ -222,7 +222,7 @@ export function ProjectCreateModal({ isOpen, onClose, onSuccess }: ProjectCreate
                 </button>
               </div>
               <textarea
-                rows={3}
+                rows={5}
                 value={leadBrief}
                 onChange={(e) => setLeadBrief(e.target.value)}
                 placeholder="Paste client requirements, site scope, or operational notes here. You can also edit or refine this after creating the project..."

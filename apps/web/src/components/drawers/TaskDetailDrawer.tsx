@@ -23,7 +23,17 @@ import { apiRequest } from '@/services/nexoraClient';
 import { MARLO_EASE } from '@/components/ui/motion';
 import { VoiceRecorderInput } from '@/components/ui/VoiceRecorderInput';
 
-type ChecklistKind = 'CHECK' | 'TEXT' | 'FILE' | 'MEDIA' | 'LINK';
+type ChecklistKind =
+  | 'CHECK'
+  | 'FILL_BLANK'
+  | 'NUMBER'
+  | 'SHORT_ANSWER'
+  | 'OPTIONS'
+  | 'MULTI_SELECT'
+  | 'TEXT'
+  | 'FILE'
+  | 'MEDIA'
+  | 'LINK';
 
 interface ChecklistItem {
   id: string;
@@ -32,6 +42,10 @@ interface ChecklistItem {
   completed: boolean;
   required?: boolean;
   value?: string;
+  selectedOptions?: string[];
+  options?: string[];
+  unit?: string;
+  placeholder?: string;
   fileId?: string;
   fileName?: string;
 }
@@ -76,6 +90,10 @@ export function TaskDetailDrawer() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadingKey, setUploadingKey] = useState<string | null>(null);
   const [evidenceNotice, setEvidenceNotice] = useState('');
+  const [aiInsights, setAiInsights] = useState<{
+    score: { overall_efficiency: number; timeliness_score: number; evidence_completeness: number; ai_risk_flags: string[] } | null;
+    analyses: Array<{ audioTranscript?: string; aiSummary?: string; identifiedLanguages?: string[]; textNote?: string; createdAt?: string }>;
+  } | null>(null);
 
   async function fetchTaskAndStatuses() {
     if (!taskId || !token) return;
@@ -84,14 +102,22 @@ export function TaskDetailDrawer() {
     try {
       const res = await apiRequest<{ task: TaskDetailData }>(`/api/v1/tasks/${taskId}`, {}, token);
       setTask(res.task);
-      const projRes = await apiRequest<{ project: { workflowStatuses?: WorkflowStatusDef[] } }>(
-        `/api/v1/projects/${res.task.projectId}`,
-        {},
-        token
-      );
+      const [projRes, aiRes] = await Promise.all([
+        apiRequest<{ project: { workflowStatuses?: WorkflowStatusDef[] } }>(
+          `/api/v1/projects/${res.task.projectId}`,
+          {},
+          token
+        ),
+        apiRequest<{ score: any; analyses: any[] }>(
+          `/api/v1/projects/${res.task.projectId}/tasks/${taskId}/ai-insights`,
+          {},
+          token
+        ).catch(() => null),
+      ]);
       if (projRes.project?.workflowStatuses?.length) {
         setStatuses(projRes.project.workflowStatuses);
       }
+      if (aiRes) setAiInsights(aiRes);
     } catch (err) {
       setError((err as Error).message || 'Failed to load task');
     } finally {
@@ -200,8 +226,12 @@ export function TaskDetailDrawer() {
       setEvidenceNotice('Uploaded to MinIO & queued for Gemini 2.5 mixed-language analysis.');
       setSelectedFile(null);
       setTextNote('');
-      await fetchTaskAndStatuses();
       notifyDataChanged();
+      if (key === 'general') {
+        closeTaskDrawer();
+        return;
+      }
+      await fetchTaskAndStatuses();
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -396,6 +426,98 @@ export function TaskDetailDrawer() {
                               </span>
                             </div>
 
+                            {/* Fill in the blank or short answer */}
+                            {(kind === 'FILL_BLANK' || kind === 'SHORT_ANSWER') && (
+                              <div className="pl-6">
+                                <input
+                                  type="text"
+                                  value={item.value || ''}
+                                  onChange={(e) => updateCheckValue(idx, e.target.value)}
+                                  onBlur={() => void saveChecklist(task.checklist)}
+                                  placeholder={kind === 'FILL_BLANK' ? 'Fill in the blank value...' : 'Short answer...'}
+                                  className="w-full rounded-lg border border-white/[0.08] bg-[#121215] px-2.5 py-1 text-xs text-white outline-none focus:border-orange-500"
+                                />
+                              </div>
+                            )}
+
+                            {/* Numeric measurement with unit */}
+                            {kind === 'NUMBER' && (
+                              <div className="flex items-center gap-2 pl-6">
+                                <input
+                                  type="number"
+                                  step="any"
+                                  value={item.value || ''}
+                                  onChange={(e) => updateCheckValue(idx, e.target.value)}
+                                  onBlur={() => void saveChecklist(task.checklist)}
+                                  placeholder="0.00"
+                                  className="w-36 rounded-lg border border-white/[0.08] bg-[#121215] px-2.5 py-1 font-mono text-xs text-white outline-none focus:border-orange-500"
+                                />
+                                {item.unit && (
+                                  <span className="font-mono text-[11px] text-zinc-400 font-semibold">{item.unit}</span>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Single selection options */}
+                            {kind === 'OPTIONS' && (
+                              <div className="flex flex-wrap gap-1.5 pl-6">
+                                {(item.options || ['Pass', 'Fail', 'N/A']).map((opt) => {
+                                  const selected = item.value === opt;
+                                  return (
+                                    <button
+                                      key={opt}
+                                      type="button"
+                                      onClick={() => {
+                                        updateCheckValue(idx, opt);
+                                        const next = [...task.checklist];
+                                        next[idx].completed = Boolean(opt);
+                                        void saveChecklist(next);
+                                      }}
+                                      className={`rounded-lg px-2.5 py-1 text-[11px] font-medium border transition-colors cursor-pointer ${
+                                        selected
+                                          ? 'border-orange-500 bg-orange-500/20 text-white font-semibold'
+                                          : 'border-white/[0.06] bg-[#121215] text-zinc-400 hover:text-white'
+                                      }`}
+                                    >
+                                      {opt}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+
+                            {/* Multi-select options */}
+                            {kind === 'MULTI_SELECT' && (
+                              <div className="flex flex-wrap gap-1.5 pl-6">
+                                {(item.options || ['Option 1', 'Option 2', 'Option 3']).map((opt) => {
+                                  const list = Array.isArray(item.selectedOptions) ? item.selectedOptions : [];
+                                  const isChecked = list.includes(opt);
+                                  return (
+                                    <button
+                                      key={opt}
+                                      type="button"
+                                      onClick={() => {
+                                        const updatedList = isChecked ? list.filter((x) => x !== opt) : [...list, opt];
+                                        const next = [...task.checklist];
+                                        next[idx].selectedOptions = updatedList;
+                                        next[idx].value = updatedList.join(', ');
+                                        next[idx].completed = updatedList.length > 0;
+                                        setTask({ ...task, checklist: next });
+                                        void saveChecklist(next);
+                                      }}
+                                      className={`rounded-lg px-2.5 py-1 text-[11px] font-medium border transition-colors cursor-pointer ${
+                                        isChecked
+                                          ? 'border-emerald-500 bg-emerald-500/20 text-emerald-200 font-semibold'
+                                          : 'border-white/[0.06] bg-[#121215] text-zinc-400 hover:text-white'
+                                      }`}
+                                    >
+                                      {isChecked ? '✓ ' : '+ '} {opt}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+
                             {(kind === 'TEXT' || kind === 'LINK') && (
                               <div className="flex gap-2 pl-6">
                                 <input
@@ -460,11 +582,16 @@ export function TaskDetailDrawer() {
                         onChange={(e) => setNewCheckKind(e.target.value as ChecklistKind)}
                         className="rounded-xl border border-white/[0.08] bg-[#121215] px-2 py-1.5 font-mono text-[10px] text-orange-300 outline-none"
                       >
-                        <option value="CHECK">Check</option>
-                        <option value="TEXT">Text</option>
-                        <option value="FILE">File</option>
-                        <option value="MEDIA">Media</option>
-                        <option value="LINK">Link</option>
+                        <option value="CHECK">☑️ Checkbox</option>
+                        <option value="FILL_BLANK">📝 Fill in Blank</option>
+                        <option value="NUMBER">🔢 Number</option>
+                        <option value="SHORT_ANSWER">💬 Short Answer</option>
+                        <option value="OPTIONS">🔘 Option</option>
+                        <option value="MULTI_SELECT">☑️ Multi Select</option>
+                        <option value="TEXT">📄 Long Text</option>
+                        <option value="FILE">📁 File</option>
+                        <option value="MEDIA">📸 Media</option>
+                        <option value="LINK">🔗 Link</option>
                       </select>
                       <button type="submit" className="flex items-center gap-1 rounded-xl bg-white/[0.08] hover:bg-white/[0.15] px-3 py-1.5 text-xs font-semibold text-white cursor-pointer">
                         <Plus size={12} /> Add
@@ -553,6 +680,47 @@ export function TaskDetailDrawer() {
                       {uploadingKey === 'general' ? 'Submitting…' : 'Submit Note / Evidence'}
                     </button>
                   </div>
+
+                  {/* AI Voice-to-Text & Efficiency Insights */}
+                  {aiInsights && (aiInsights.score || aiInsights.analyses.length > 0) && (
+                    <div className="rounded-2xl border border-orange-500/25 bg-[#161314] p-4 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-orange-300">
+                          Gemini 2.5 Voice &amp; Evidence Analysis
+                        </span>
+                        {aiInsights.score && (
+                          <span className="rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[10px] font-bold text-emerald-300">
+                            Efficiency: {Number(aiInsights.score.overall_efficiency).toFixed(1)}%
+                          </span>
+                        )}
+                      </div>
+                      {aiInsights.analyses.map((a, idx) => (
+                        <div key={idx} className="rounded-xl border border-white/[0.06] bg-[#121215] p-3 space-y-1.5 text-xs">
+                          {a.identifiedLanguages && a.identifiedLanguages.length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                              {a.identifiedLanguages.map((lang) => (
+                                <span key={lang} className="rounded bg-orange-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-orange-300">
+                                  {lang}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          {a.audioTranscript && (
+                            <p className="text-zinc-200 leading-relaxed">
+                              <span className="text-zinc-400 font-semibold">Transcript: </span>
+                              {a.audioTranscript}
+                            </p>
+                          )}
+                          {a.aiSummary && (
+                            <p className="text-zinc-400 text-[11px]">{a.aiSummary}</p>
+                          )}
+                          {!a.audioTranscript && a.textNote && (
+                            <p className="text-zinc-300 text-[11px]">Note: {a.textNote}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </>
               )}
             </div>

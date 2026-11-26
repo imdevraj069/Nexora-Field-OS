@@ -705,11 +705,30 @@ export const ProjectService = {
     // Strict validation: cannot move to DONE/COMPLETED/SUBMITTED/VERIFIED if required checklist or file slots are incomplete
     if (isDoneCategory) {
       const checklistItems = Array.isArray(task.checklist) ? task.checklist : [];
-      const unverified = checklistItems.filter((i: { completed?: boolean; required?: boolean; kind?: string; value?: string; fileId?: string }) => {
+      const unverified = checklistItems.filter((i: {
+        completed?: boolean;
+        required?: boolean;
+        kind?: string;
+        value?: unknown;
+        selectedOptions?: unknown[];
+        fileId?: string;
+      }) => {
         if (i.required === false) return false;
         if (!i.completed) return true;
-        if ((i.kind === 'TEXT' || i.kind === 'LINK') && !String(i.value || '').trim()) return true;
-        if ((i.kind === 'FILE' || i.kind === 'MEDIA') && !i.fileId) return true;
+        const kind = (i.kind || 'CHECK').toUpperCase();
+        if (['TEXT', 'SHORT_ANSWER', 'FILL_BLANK', 'LINK'].includes(kind)) {
+          if (!String(i.value ?? '').trim()) return true;
+        }
+        if (kind === 'NUMBER') {
+          if (i.value === undefined || i.value === null || String(i.value).trim() === '' || isNaN(Number(i.value))) return true;
+        }
+        if (kind === 'OPTIONS' || kind === 'DROPDOWN') {
+          if (!String(i.value ?? '').trim()) return true;
+        }
+        if (kind === 'MULTI_SELECT') {
+          if (!Array.isArray(i.selectedOptions) || i.selectedOptions.length === 0) return true;
+        }
+        if ((kind === 'FILE' || kind === 'MEDIA') && !i.fileId) return true;
         return false;
       });
       if (unverified.length > 0) {
@@ -868,6 +887,43 @@ export const ProjectService = {
       user_id: auth.userId,
     });
     return result;
+  },
+
+  async getTaskAiInsights(auth: AuthContext, projectId: string, taskId: string) {
+    const { ownerOrgId, ownerShardId } = await this.resolveAccess(auth.userId, auth.activeOrgId, projectId);
+    const scoreRes = await dataRouter.postgres
+      .getReadPool(ownerShardId, true)
+      .query(
+        `SELECT timeliness_score, evidence_completeness, overall_efficiency, ai_risk_flags, evaluated_at
+         FROM task_efficiency_scores WHERE task_id = $1`,
+        [taskId],
+      );
+    let analyses: Array<Record<string, unknown>> = [];
+    try {
+      const mongoConn = await dataRouter.mongo.getConnectionForOrg(ownerOrgId);
+      analyses = await mongoConn
+        .collection('ai_raw_analyses')
+        .find({ projectId, taskId })
+        .sort({ createdAt: -1 })
+        .limit(10)
+        .toArray();
+    } catch {
+      // ignore if mongo unavailable
+    }
+    return {
+      score: scoreRes.rows[0] ?? null,
+      analyses: analyses.map((a) => ({
+        fileId: a.fileId ?? null,
+        mimeType: a.mimeType ?? '',
+        textNote: a.textNote ?? '',
+        audioTranscript: a.audioTranscript ?? '',
+        aiSummary: a.aiSummary ?? '',
+        identifiedLanguages: Array.isArray(a.identifiedLanguages) ? a.identifiedLanguages : [],
+        overallEfficiency: a.overallEfficiency ?? null,
+        riskFlags: Array.isArray(a.riskFlags) ? a.riskFlags : [],
+        createdAt: a.createdAt ?? null,
+      })),
+    };
   },
 
   async invitePartnerOrg(
@@ -1446,6 +1502,11 @@ export const ProjectService = {
 
   async deleteFile(auth: AuthContext, projectId: string, fileId: string) {
     const { ownerOrgId, roleCtx } = await this.resolveAccess(auth.userId, auth.activeOrgId, projectId);
+    const pool = dataRouter.postgres.getReadPool(auth.shardId, true);
+    const projCheck = await pool.query(`SELECT status FROM projects WHERE project_id = $1`, [projectId]);
+    if (projCheck.rows[0]?.status === 'ARCHIVED') {
+      throw new AppError(403, 'Cannot delete media from an archived project');
+    }
     if (
       !hasPermission(roleCtx, PERMISSION_FLAGS.PROJECT_MANAGE) &&
       !hasPermission(roleCtx, PERMISSION_FLAGS.ORG_MANAGE_SETTINGS) &&

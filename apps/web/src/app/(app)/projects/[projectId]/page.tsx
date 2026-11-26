@@ -380,7 +380,7 @@ export default function ProjectDetailView() {
             </span>
           </div>
           <textarea
-            rows={4}
+            rows={5}
             required
             value={blueprintBrief}
             onChange={(e) => setBlueprintBrief(e.target.value)}
@@ -576,14 +576,79 @@ export default function ProjectDetailView() {
 
       {/* AI Report */}
       {aiReport && (
-        <RevealInView className="rounded-[22px] border border-orange-500/30 bg-[#151212] p-6 shadow-2xl space-y-3">
-          <div className="flex items-center justify-between">
+        <RevealInView className="rounded-[22px] border border-orange-500/30 bg-[#151212] p-6 shadow-2xl space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="font-display text-base font-bold text-white flex items-center gap-2">
               <Sparkles className="text-orange-400" size={17} /> Gemini 2.5 Intelligence Report
             </h2>
-            <span className="font-mono text-xs text-orange-400">Health: {aiReport.overall_health_score}/100</span>
+            <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
+              <span className="rounded-full bg-orange-500/15 px-3 py-1 text-orange-300">
+                Health: {aiReport.overall_health_score}/100
+              </span>
+              <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-emerald-300">
+                Completion: {aiReport.completion_percentage}% ({aiReport.completed_tasks}/{aiReport.total_tasks} tasks)
+              </span>
+              <span className="rounded-full bg-white/[0.08] px-3 py-1 text-zinc-300">
+                Files: {aiReport.total_files_submitted || 0} · Pending Checks: {aiReport.pending_checklists || 0}
+              </span>
+            </div>
           </div>
-          <p className="text-xs text-zinc-300 leading-relaxed bg-[#18181c] p-3.5 rounded-2xl">{aiReport.executive_summary}</p>
+
+          <p className="text-xs text-zinc-200 leading-relaxed bg-[#18181c] p-4 rounded-2xl border border-white/[0.06]">
+            {aiReport.executive_summary}
+          </p>
+
+          {aiReport.recommendations && (
+            <div className="rounded-2xl bg-emerald-500/10 border border-emerald-500/20 p-3.5 text-xs text-emerald-200">
+              <span className="font-bold text-emerald-300 block mb-1">AI Recommendations:</span>
+              {aiReport.recommendations}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="rounded-2xl bg-[#18181c] p-4 border border-white/[0.06] space-y-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-orange-300 block">
+                Voice-to-Text Transcripts ({(aiReport.voice_transcripts || []).length})
+              </span>
+              {(!aiReport.voice_transcripts || aiReport.voice_transcripts.length === 0) ? (
+                <p className="text-xs text-zinc-500">No voice transcripts processed yet.</p>
+              ) : (
+                <ul className="space-y-1.5 text-xs text-zinc-200">
+                  {aiReport.voice_transcripts.map((vt: string, i: number) => (
+                    <li key={i} className="rounded-xl bg-[#121215] p-2.5 border border-white/[0.04]">
+                      “{vt}”
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {aiReport.identified_languages && aiReport.identified_languages.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {aiReport.identified_languages.map((lang: string) => (
+                    <span key={lang} className="rounded-full bg-orange-500/15 px-2.5 py-0.5 text-[10px] font-semibold text-orange-300">
+                      {lang}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-2xl bg-[#18181c] p-4 border border-white/[0.06] space-y-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-amber-300 block">
+                Detected Risk Flags ({(aiReport.risk_flags || []).length})
+              </span>
+              {(!aiReport.risk_flags || aiReport.risk_flags.length === 0) ? (
+                <p className="text-xs text-emerald-400">No operational risks flagged.</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {aiReport.risk_flags.map((rf: string) => (
+                    <span key={rf} className="rounded-full bg-red-500/15 border border-red-500/30 px-2.5 py-1 text-[11px] font-semibold text-red-300">
+                      {rf}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </RevealInView>
       )}
 

@@ -67,7 +67,8 @@ interface ReimbursementClaim {
 }
 
 interface ProjectOption {
-  project_id: string;
+  projectId: string;
+  project_id?: string;
   title: string;
 }
 
@@ -141,12 +142,15 @@ export default function FinancePage() {
       if (expRes.ok) setExpenses((await expRes.json()).expenses || []);
       if (clmRes.ok) setClaims((await clmRes.json()).claims || []);
       if (projRes.ok) {
-        const list = (await projRes.json()).projects || [];
+        const list = ((await projRes.json()).projects || []).map((p: any) => ({
+          projectId: p.projectId || p.project_id,
+          title: p.title,
+        }));
         setProjects(list);
         if (list.length > 0) {
-          setBProjectId((p) => p || list[0].project_id);
-          setEProjectId((p) => p || list[0].project_id);
-          setRProjectId((p) => p || list[0].project_id);
+          setBProjectId((p) => p || list[0].projectId);
+          setEProjectId((p) => p || list[0].projectId);
+          setRProjectId((p) => p || list[0].projectId);
         }
       }
     } catch {
@@ -399,7 +403,7 @@ export default function FinancePage() {
                   required
                 >
                   {projects.map((p) => (
-                    <option key={p.project_id} value={p.project_id}>
+                    <option key={p.projectId} value={p.projectId}>
                       {p.title}
                     </option>
                   ))}
@@ -468,15 +472,30 @@ export default function FinancePage() {
               </div>
             ) : (
               budgets.map((b) => {
-                const pct =
+                const rawPct =
                   b.total_budget_paise > 0
-                    ? Math.min(100, (b.spent_paise / b.total_budget_paise) * 100)
+                    ? (b.spent_paise / b.total_budget_paise) * 100
                     : 0;
+                const pct = Math.min(100, rawPct);
+                const remainingPaise = Math.max(0, b.total_budget_paise - b.spent_paise);
+                const healthLabel =
+                  rawPct > 100 ? "Overrun" : rawPct >= 80 ? "Warning" : "Healthy";
+                const healthBadge =
+                  rawPct > 100
+                    ? "bg-red-100 text-red-700"
+                    : rawPct >= 80
+                    ? "bg-amber-100 text-amber-700"
+                    : "bg-emerald-100 text-emerald-700";
                 return (
                   <div key={b.budget_id} className="glass-card rounded-2xl p-5 space-y-3">
                     <div className="flex items-start justify-between gap-4">
                       <div>
-                        <h3 className="text-sm font-bold">{b.project_title}</h3>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-sm font-bold">{b.project_title}</h3>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${healthBadge}`}>
+                            {healthLabel}
+                          </span>
+                        </div>
                         <p className="text-xs text-zinc-500 mt-0.5">
                           Revisions: {b.revisions_count} {b.notes ? `• ${b.notes}` : ""}
                         </p>
@@ -484,7 +503,7 @@ export default function FinancePage() {
                       <div className="text-right">
                         <p className="text-sm font-bold">{formatINR(b.total_budget_paise)}</p>
                         <p className="text-[11px] text-zinc-500">
-                          Spent {formatINR(b.spent_paise)} ({pct.toFixed(1)}%)
+                          Spent {formatINR(b.spent_paise)} ({rawPct.toFixed(1)}%)
                         </p>
                       </div>
                     </div>
@@ -493,6 +512,20 @@ export default function FinancePage() {
                         className="h-full rounded-full bg-gradient-to-r from-[#ff3b30] to-[#f97316]"
                         style={{ width: `${pct}%` }}
                       />
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 pt-1 text-[11px]">
+                      <div className="glass-subtle rounded-lg px-2.5 py-1.5">
+                        <span className="text-zinc-500 block">Distributed</span>
+                        <span className="font-bold">{formatINR(b.distributed_budget_paise)}</span>
+                      </div>
+                      <div className="glass-subtle rounded-lg px-2.5 py-1.5">
+                        <span className="text-zinc-500 block">Floated</span>
+                        <span className="font-bold">{formatINR(b.floated_budget_paise)}</span>
+                      </div>
+                      <div className="glass-subtle rounded-lg px-2.5 py-1.5">
+                        <span className="text-zinc-500 block">Remaining</span>
+                        <span className="font-bold text-emerald-700">{formatINR(remainingPaise)}</span>
+                      </div>
                     </div>
                   </div>
                 );
