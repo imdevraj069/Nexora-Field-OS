@@ -298,7 +298,7 @@ Provide JSON response:
       }
     }
 
-    return {
+    const report = {
       project_id: projectId,
       overall_health_score: healthScore,
       completion_percentage: completionPercentage,
@@ -312,5 +312,20 @@ Provide JSON response:
       executive_summary: executiveSummary,
       recommendations: recommendations,
     };
+
+    try {
+      const mongoConn = await dataRouter.mongo.getConnectionForOrg(orgId);
+      await mongoConn.collection('project_ai_reports').insertOne({
+        orgId,
+        projectId,
+        generatedBy: userId,
+        createdAt: new Date(),
+        ...report,
+      });
+    } catch (err) {
+      console.warn('[ai-governance-service] Failed to persist project AI report:', (err as Error).message);
+    }
+
+    return report;
   },
 };

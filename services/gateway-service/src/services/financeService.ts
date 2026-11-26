@@ -114,7 +114,17 @@ export const FinanceService = {
     const budgetId = `BDG-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
     const total = Number(body.totalBudgetPaise);
     const distributed = body.distributedBudgetPaise !== undefined ? Number(body.distributedBudgetPaise) : total;
-    const floated = body.floatedBudgetPaise !== undefined ? Number(body.floatedBudgetPaise) : 0;
+    const floated = body.floatedBudgetPaise !== undefined ? Number(body.floatedBudgetPaise) : Math.max(0, total - distributed);
+
+    if (!Number.isFinite(total) || total <= 0 || !Number.isFinite(distributed) || distributed < 0 || !Number.isFinite(floated) || floated < 0) {
+      throw new AppError(400, 'Budget amounts must be valid non-negative numbers (Total > 0)');
+    }
+    if (distributed > total) {
+      throw new AppError(400, 'Distributed budget cannot exceed Total Budget');
+    }
+    if (distributed + floated !== total) {
+      throw new AppError(400, 'Distributed + Floated budget must equal Total Budget');
+    }
 
     await pool.query(
       `INSERT INTO project_budgets (budget_id, org_id, project_id, total_budget_paise, distributed_budget_paise, floated_budget_paise, currency, notes, created_by)

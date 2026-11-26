@@ -44,6 +44,10 @@ router.patch('/projects/:projectId/tasks/:taskId', authMiddleware, asyncHandler(
 router.patch('/projects/:projectId/tasks/:taskId/status', authMiddleware, asyncHandler(GatewayController.updateTaskStatus));
 router.patch('/projects/:projectId/tasks/:taskId/checklist', authMiddleware, asyncHandler(GatewayController.updateChecklist));
 router.post('/projects/:projectId/analyze-ai', authMiddleware, asyncHandler(GatewayController.analyzeProjectProgress));
+router.get('/projects/:projectId/ai-reports', authMiddleware, asyncHandler(GatewayController.getProjectAiReports));
+router.get('/projects/:projectId/team', authMiddleware, asyncHandler(GatewayController.listProjectTeam));
+router.post('/projects/:projectId/team', authMiddleware, asyncHandler(GatewayController.assignProjectTeamMember));
+router.delete('/projects/:projectId/team/:userId', authMiddleware, asyncHandler(GatewayController.removeProjectTeamMember));
 router.get('/projects/:projectId/tasks/:taskId/ai-insights', authMiddleware, asyncHandler(GatewayController.getTaskAiInsights));
 router.post(
   '/projects/:projectId/tasks/:taskId/evidence',

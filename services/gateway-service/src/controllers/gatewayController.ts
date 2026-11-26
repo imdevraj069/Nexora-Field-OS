@@ -178,6 +178,26 @@ export const GatewayController = {
     const result = await ProjectService.analyzeProjectProgress(req.auth!, String(req.params.projectId));
     res.json(result);
   },
+  getProjectAiReports: async (req: AuthedRequest, res: Response) => {
+    const data = await ProjectService.getProjectAiReports(req.auth!, String(req.params.projectId));
+    res.json(data);
+  },
+  listProjectTeam: async (req: AuthedRequest, res: Response) => {
+    const team = await ProjectService.listProjectTeam(req.auth!, String(req.params.projectId));
+    res.json({ team });
+  },
+  assignProjectTeamMember: async (req: AuthedRequest, res: Response) => {
+    const result = await ProjectService.assignProjectTeamMember(req.auth!, String(req.params.projectId), req.body);
+    res.status(201).json(result);
+  },
+  removeProjectTeamMember: async (req: AuthedRequest, res: Response) => {
+    const result = await ProjectService.removeProjectTeamMember(
+      req.auth!,
+      String(req.params.projectId),
+      String(req.params.userId),
+    );
+    res.json(result);
+  },
   getTaskAiInsights: async (req: AuthedRequest, res: Response) => {
     const insights = await ProjectService.getTaskAiInsights(
       req.auth!,

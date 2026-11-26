@@ -164,9 +164,53 @@ export default function FinancePage() {
     loadFinance();
   }, [loadFinance]);
 
+  function handleTotalChange(val: string) {
+    setBTotalRupees(val);
+    const t = Math.max(0, Number(val || 0));
+    if (!val) {
+      setBDistributedRupees("");
+      setBFloatedRupees("");
+      return;
+    }
+    const d = bDistributedRupees === "" ? t : Math.min(t, Math.max(0, Number(bDistributedRupees || 0)));
+    setBDistributedRupees(String(d));
+    setBFloatedRupees(String(Math.max(0, t - d)));
+  }
+
+  function handleDistributedChange(val: string) {
+    const t = Math.max(0, Number(bTotalRupees || 0));
+    if (val === "") {
+      setBDistributedRupees("");
+      setBFloatedRupees(t > 0 ? String(t) : "");
+      return;
+    }
+    const d = Math.min(t, Math.max(0, Number(val)));
+    setBDistributedRupees(String(d));
+    setBFloatedRupees(String(Math.max(0, t - d)));
+  }
+
+  function handleFloatedChange(val: string) {
+    const t = Math.max(0, Number(bTotalRupees || 0));
+    if (val === "") {
+      setBFloatedRupees("");
+      setBDistributedRupees(t > 0 ? String(t) : "");
+      return;
+    }
+    const f = Math.min(t, Math.max(0, Number(val)));
+    setBFloatedRupees(String(f));
+    setBDistributedRupees(String(Math.max(0, t - f)));
+  }
+
   async function handleSaveBudget(e: FormEvent) {
     e.preventDefault();
     if (!bProjectId || !bTotalRupees) return;
+    const totalNum = Number(bTotalRupees);
+    const distNum = Number(bDistributedRupees || 0);
+    const floatNum = Number(bFloatedRupees || 0);
+    if (totalNum <= 0 || distNum + floatNum !== totalNum) {
+      setError("Distributed + Floated budget must equal Total Budget.");
+      return;
+    }
     setSubmitting(true);
     setError("");
     try {
@@ -415,7 +459,7 @@ export default function FinancePage() {
                   type="number"
                   min="1"
                   value={bTotalRupees}
-                  onChange={(e) => setBTotalRupees(e.target.value)}
+                  onChange={(e) => handleTotalChange(e.target.value)}
                   placeholder="e.g. 500000"
                   className="w-full glass-subtle rounded-xl px-3 py-2 outline-none"
                   required
@@ -427,24 +471,31 @@ export default function FinancePage() {
                   <input
                     type="number"
                     min="0"
+                    max={bTotalRupees || undefined}
                     value={bDistributedRupees}
-                    onChange={(e) => setBDistributedRupees(e.target.value)}
+                    onChange={(e) => handleDistributedChange(e.target.value)}
                     placeholder="0"
                     className="w-full glass-subtle rounded-xl px-3 py-2 outline-none"
                   />
                 </div>
                 <div>
-                  <label className="font-semibold text-zinc-500 block mb-1">Floated (INR)</label>
+                  <label className="font-semibold text-zinc-500 block mb-1">Floated (Auto)</label>
                   <input
                     type="number"
                     min="0"
+                    max={bTotalRupees || undefined}
                     value={bFloatedRupees}
-                    onChange={(e) => setBFloatedRupees(e.target.value)}
+                    onChange={(e) => handleFloatedChange(e.target.value)}
                     placeholder="0"
                     className="w-full glass-subtle rounded-xl px-3 py-2 outline-none"
                   />
                 </div>
               </div>
+              {bTotalRupees && (
+                <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 text-[11px] font-semibold text-emerald-700">
+                  Distributed ({formatINR(Number(bDistributedRupees || 0) * 100)}) + Floated ({formatINR(Number(bFloatedRupees || 0) * 100)}) = {formatINR(Number(bTotalRupees) * 100)} ✓
+                </div>
+              )}
               <div>
                 <label className="font-semibold text-zinc-500 block mb-1">Notes</label>
                 <textarea

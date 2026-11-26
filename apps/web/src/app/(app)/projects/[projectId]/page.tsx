@@ -11,6 +11,7 @@ import {
   Clock,
   Sparkles,
   UserPlus,
+  Users,
   CheckSquare,
   Edit3,
   Trash2,
@@ -33,9 +34,10 @@ import { RevealInView, AnimatedRing, MARLO_BACK_SPRING } from '@/components/ui/m
 export default function ProjectDetailView() {
   const params = useParams();
   const projectId = params?.projectId as string;
-  const { activeOrg, token } = useWorkspaceAuth();
+  const { activeOrg, token, user } = useWorkspaceAuth();
   const { permissions } = useAuthStore();
   const { openTaskDrawer, refreshTick, notifyDataChanged } = useDrawerStore();
+  const aiReportRef = React.useRef<HTMLDivElement>(null);
 
   const [project, setProject] = useState<any>(null);
   const [stages, setStages] = useState<any[]>([]);
@@ -72,10 +74,16 @@ export default function ProjectDetailView() {
   const [boardError, setBoardError] = useState('');
 
   const [analyzingAi, setAnalyzingAi] = useState(false);
+  const [aiError, setAiError] = useState('');
   const [aiReport, setAiReport] = useState<any>(null);
+  const [projectTeam, setProjectTeam] = useState<Array<{ userId: string; fullName: string; email: string; roleName: string; allocatedStageIds: string[] }>>([]);
+  const [showTeamPanel, setShowTeamPanel] = useState(false);
+  const [teamMemberId, setTeamMemberId] = useState('');
 
   const canManageProject = Boolean(
-    permissions[PERMISSION_FLAGS.PROJECT_MANAGE] || permissions[PERMISSION_FLAGS.ORG_MANAGE_SETTINGS]
+    permissions[PERMISSION_FLAGS.PROJECT_MANAGE] ||
+      permissions[PERMISSION_FLAGS.ORG_MANAGE_SETTINGS] ||
+      (project?.managerUserId && project.managerUserId === user?.userId)
   );
   const canManageStages = Boolean(
     canManageProject || permissions[PERMISSION_FLAGS.STAGE_MANAGE_ALL]
@@ -85,7 +93,7 @@ export default function ProjectDetailView() {
     if (!token || !activeOrg || !projectId) return;
     setLoading(true);
     try {
-      const [res, dirRes, colRes, memRes] = await Promise.all([
+      const [res, dirRes, colRes, memRes, teamRes, aiSavedRes] = await Promise.all([
         apiRequest<{ project: any; stages: any[] }>(`/api/v1/projects/${projectId}`, {}, token),
         apiRequest<{ orgs: any[] }>('/api/v1/orgs/directory', {}, token).catch(() => ({ orgs: [] })),
         apiRequest<{ orgCollaborations: any[]; memberCollaborators: any[] }>(
@@ -94,6 +102,8 @@ export default function ProjectDetailView() {
           token
         ).catch(() => ({ orgCollaborations: [], memberCollaborators: [] })),
         apiRequest<{ members: any[] }>('/api/v1/org/members', {}, token).catch(() => ({ members: [] })),
+        apiRequest<{ team: any[] }>(`/api/v1/projects/${projectId}/team`, {}, token).catch(() => ({ team: [] })),
+        apiRequest<{ latest: any }>(`/api/v1/projects/${projectId}/ai-reports`, {}, token).catch(() => ({ latest: null })),
       ]);
       setProject(res.project);
       setStages(res.stages || []);
@@ -102,6 +112,8 @@ export default function ProjectDetailView() {
       setOrgCollaborations(colRes.orgCollaborations || []);
       setMemberCollaborators(colRes.memberCollaborators || []);
       setOrgMembers(memRes.members || []);
+      setProjectTeam(teamRes.team || []);
+      if (aiSavedRes.latest) setAiReport(aiSavedRes.latest);
       if (dirRes.orgs?.[0] && !partnerOrgId) setPartnerOrgId(dirRes.orgs[0].orgId);
       if (res.stages?.[0] && !selectedStageId) setSelectedStageId(res.stages[0].stageId);
     } catch (e) {
@@ -273,14 +285,44 @@ export default function ProjectDetailView() {
     await load();
   }
 
+  async function handleAssignOrgTeamMember(e: React.FormEvent) {
+    e.preventDefault();
+    if (!token || !teamMemberId) return;
+    try {
+      await apiRequest(
+        `/api/v1/projects/${projectId}/team`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            userId: teamMemberId,
+            allocatedStageIds: stages.map((s) => s.stageId),
+          }),
+        },
+        token
+      );
+      setTeamMemberId('');
+      await load();
+    } catch (err) {
+      alert((err as Error).message);
+    }
+  }
+
+  async function handleRemoveOrgTeamMember(userId: string) {
+    if (!token) return;
+    await apiRequest(`/api/v1/projects/${projectId}/team/${userId}`, { method: 'DELETE' }, token);
+    await load();
+  }
+
   async function triggerAiAnalysis() {
     if (!token || !projectId) return;
     setAnalyzingAi(true);
+    setAiError('');
     try {
       const res = await apiRequest<any>(`/api/v1/projects/${projectId}/analyze-ai`, { method: 'POST' }, token);
       setAiReport(res);
+      setTimeout(() => aiReportRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 100);
     } catch (e) {
-      alert((e as Error).message || 'Failed to generate AI analysis');
+      setAiError((e as Error).message || 'Failed to generate AI analysis');
     } finally {
       setAnalyzingAi(false);
     }
@@ -344,6 +386,12 @@ export default function ProjectDetailView() {
                   className="flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-[#18181c] px-3.5 py-2 text-xs font-semibold text-zinc-200 hover:border-orange-500/40 cursor-pointer"
                 >
                   <Sparkles size={13} className="text-orange-400" /> Lead-to-Plan
+                </button>
+                <button
+                  onClick={() => setShowTeamPanel(!showTeamPanel)}
+                  className="flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-[#18181c] px-3.5 py-2 text-xs font-semibold text-zinc-200 hover:border-orange-500/40 cursor-pointer"
+                >
+                  <Users size={13} className="text-orange-400" /> Team ({projectTeam.length})
                 </button>
                 <button
                   onClick={() => setShowCollabForm(!showCollabForm)}
@@ -574,8 +622,75 @@ export default function ProjectDetailView() {
         </RevealInView>
       </div>
 
+      {/* Organization Project Team Assignment Panel (Admin / Assigned PM) */}
+      {showTeamPanel && (
+        <div className="rounded-[22px] border border-white/[0.1] bg-[#151314] p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-white flex items-center gap-1.5">
+              <Users size={14} className="text-orange-400" />
+              Project Team ({activeOrg?.org_name}) — Assigned by Admin / PM
+            </span>
+          </div>
+          <form onSubmit={handleAssignOrgTeamMember} className="flex flex-wrap items-end gap-3">
+            <div className="flex-1 min-w-[220px]">
+              <label className="block text-[11px] font-semibold text-zinc-400 mb-1">
+                Assign Onboarded Organization Member
+              </label>
+              <select
+                value={teamMemberId}
+                onChange={(e) => setTeamMemberId(e.target.value)}
+                className="w-full rounded-xl border border-white/[0.08] bg-[#121215] px-3 py-2 text-xs text-white outline-none"
+              >
+                <option value="">Select member...</option>
+                {orgMembers.map((m) => (
+                  <option key={m.userId} value={m.userId}>
+                    {m.fullName || m.email}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              type="submit"
+              disabled={!teamMemberId}
+              className="rounded-xl bg-gradient-to-r from-[#ff3b30] to-[#f97316] px-4 py-2 text-xs font-semibold text-white disabled:opacity-50 cursor-pointer"
+            >
+              Assign to Project
+            </button>
+          </form>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+            {projectTeam.length === 0 ? (
+              <p className="text-xs text-zinc-500">No organization members explicitly assigned yet.</p>
+            ) : (
+              projectTeam.map((tm) => (
+                <div key={tm.userId} className="flex items-center justify-between rounded-xl border border-white/[0.06] bg-[#121215] px-3 py-2 text-xs">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-white truncate">{tm.fullName}</p>
+                    <p className="text-[10px] text-zinc-400 truncate">{tm.roleName} · {tm.allocatedStageIds.length} milestones</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void handleRemoveOrgTeamMember(tm.userId)}
+                    className="text-[11px] font-semibold text-red-400 hover:underline cursor-pointer shrink-0 ml-2"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* AI Error Banner */}
+      {aiError && (
+        <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-300">
+          {aiError}
+        </div>
+      )}
+
       {/* AI Report */}
       {aiReport && (
+        <div ref={aiReportRef}>
         <RevealInView className="rounded-[22px] border border-orange-500/30 bg-[#151212] p-6 shadow-2xl space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="font-display text-base font-bold text-white flex items-center gap-2">
@@ -650,9 +765,8 @@ export default function ProjectDetailView() {
             </div>
           </div>
         </RevealInView>
+        </div>
       )}
-
-      {/* Stages | Project Kanban Board Toggle + Add Stage */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="flex rounded-full border border-white/[0.07] bg-[#121215] p-1">

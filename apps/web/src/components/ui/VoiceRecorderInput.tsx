@@ -12,6 +12,11 @@ export function VoiceRecorderInput({ onAudioCaptured, onTranscriptUpdate }: Voic
   const [recording, setRecording] = useState(false);
   const [lang, setLang] = useState<'en-IN' | 'hi-IN'>('en-IN');
   const [recordedUrl, setRecordedUrl] = useState<string | null>(null);
+  const [speechSupported] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    const win = window as unknown as Record<string, unknown>;
+    return Boolean(win.SpeechRecognition || win.webkitSpeechRecognition);
+  });
 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -107,7 +112,12 @@ export function VoiceRecorderInput({ onAudioCaptured, onTranscriptUpdate }: Voic
 
       {recordedUrl && !recording && (
         <span className="flex items-center gap-1 text-[11px] font-mono text-emerald-400">
-          <Volume2 size={12} /> Voice note ready
+          <Volume2 size={12} /> Voice note ready (Gemini 2.5 will transcribe on submit)
+        </span>
+      )}
+      {!speechSupported && !recordedUrl && (
+        <span className="text-[10px] text-zinc-400">
+          Audio captured for Gemini 2.5 transcription
         </span>
       )}
     </div>

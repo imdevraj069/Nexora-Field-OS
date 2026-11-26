@@ -889,6 +889,137 @@ export const ProjectService = {
     return result;
   },
 
+  async getProjectAiReports(
+    auth: AuthContext,
+    projectId: string,
+  ): Promise<{ latest: Record<string, unknown> | null; reports: Array<Record<string, unknown>> }> {
+    const { ownerOrgId } = await this.resolveAccess(auth.userId, auth.activeOrgId, projectId);
+    try {
+      const mongoConn = await dataRouter.mongo.getConnectionForOrg(ownerOrgId);
+      const raw = await mongoConn
+        .collection('project_ai_reports')
+        .find({ projectId })
+        .sort({ createdAt: -1 })
+        .limit(10)
+        .toArray();
+      const reports = raw.map((r) => ({ ...r, _id: String(r._id) }));
+      return { latest: reports[0] ?? null, reports };
+    } catch {
+      return { latest: null, reports: [] };
+    }
+  },
+
+  async listProjectTeam(auth: AuthContext, projectId: string) {
+    const { ownerOrgId, ownerShardId } = await this.resolveAccess(auth.userId, auth.activeOrgId, projectId);
+    const ownerPool = dataRouter.postgres.getReadPool(ownerShardId, true);
+    const [stagesRes, membersRes] = await Promise.all([
+      ownerPool.query(`SELECT stage_id FROM stages WHERE project_id = $1`, [projectId]),
+      ownerPool.query(
+        `SELECT m.user_id, m.allocated_stage_ids, r.name AS role_name
+         FROM org_members m
+         LEFT JOIN roles r ON r.role_id = m.role_id
+         WHERE m.org_id = $1 AND m.status = 'ACTIVE'`,
+        [ownerOrgId],
+      ),
+    ]);
+    const projectStageIds = new Set(stagesRes.rows.map((s) => String(s.stage_id)));
+    const assignedRows = membersRes.rows.filter((m) => {
+      const alloc = Array.isArray(m.allocated_stage_ids) ? (m.allocated_stage_ids as string[]) : [];
+      return alloc.some((id) => projectStageIds.has(String(id)));
+    });
+    const userIds = assignedRows.map((m) => String(m.user_id));
+    const usersRes = userIds.length
+      ? await dataRouter.postgres
+          .getGlobalPool()
+          .query(`SELECT user_id, full_name, email FROM users WHERE user_id = ANY($1::text[])`, [userIds])
+      : { rows: [] };
+    const userMap = new Map(usersRes.rows.map((u) => [String(u.user_id), u]));
+
+    return assignedRows.map((m) => {
+      const u = userMap.get(String(m.user_id));
+      const alloc = Array.isArray(m.allocated_stage_ids) ? (m.allocated_stage_ids as string[]) : [];
+      return {
+        userId: String(m.user_id),
+        fullName: u?.full_name || u?.email || String(m.user_id),
+        email: u?.email || '',
+        roleName: String(m.role_name || 'Member'),
+        allocatedStageIds: alloc.filter((id) => projectStageIds.has(String(id))),
+      };
+    });
+  },
+
+  async assignProjectTeamMember(
+    auth: AuthContext,
+    projectId: string,
+    args: { userId: string; allocatedStageIds?: string[] },
+  ) {
+    const { ownerOrgId, ownerShardId, roleCtx } = await this.resolveAccess(auth.userId, auth.activeOrgId, projectId);
+    const pool = dataRouter.postgres.getPrimaryPool(ownerShardId);
+    const projRes = await pool.query(`SELECT manager_user_id FROM projects WHERE project_id = $1`, [projectId]);
+    const isAssignedPm = projRes.rows[0]?.manager_user_id === auth.userId;
+    if (
+      !isAssignedPm &&
+      !hasPermission(roleCtx, PERMISSION_FLAGS.PROJECT_MANAGE) &&
+      !hasPermission(roleCtx, PERMISSION_FLAGS.ORG_MANAGE_SETTINGS)
+    ) {
+      throw new AppError(403, 'Forbidden: requires Org Admin or assigned Project Manager');
+    }
+
+    const stagesRes = await pool.query(`SELECT stage_id FROM stages WHERE project_id = $1`, [projectId]);
+    const allStageIds = stagesRes.rows.map((s) => String(s.stage_id));
+    const targetStages = args.allocatedStageIds?.length ? args.allocatedStageIds : allStageIds;
+
+    const memRes = await pool.query(
+      `SELECT allocated_stage_ids FROM org_members WHERE org_id = $1 AND user_id = $2 AND status = 'ACTIVE'`,
+      [ownerOrgId, args.userId],
+    );
+    if (memRes.rows.length === 0) {
+      throw new AppError(404, 'User is not an active member of this organization');
+    }
+    const existing = Array.isArray(memRes.rows[0].allocated_stage_ids)
+      ? (memRes.rows[0].allocated_stage_ids as string[])
+      : [];
+    const projSet = new Set(allStageIds);
+    const merged = Array.from(new Set([...existing.filter((id) => !projSet.has(id)), ...targetStages]));
+
+    await pool.query(`UPDATE org_members SET allocated_stage_ids = $1::jsonb WHERE org_id = $2 AND user_id = $3`, [
+      JSON.stringify(merged),
+      ownerOrgId,
+      args.userId,
+    ]);
+    return { userId: args.userId, allocatedStageIds: targetStages };
+  },
+
+  async removeProjectTeamMember(auth: AuthContext, projectId: string, userId: string) {
+    const { ownerOrgId, ownerShardId, roleCtx } = await this.resolveAccess(auth.userId, auth.activeOrgId, projectId);
+    const pool = dataRouter.postgres.getPrimaryPool(ownerShardId);
+    const projRes = await pool.query(`SELECT manager_user_id FROM projects WHERE project_id = $1`, [projectId]);
+    const isAssignedPm = projRes.rows[0]?.manager_user_id === auth.userId;
+    if (
+      !isAssignedPm &&
+      !hasPermission(roleCtx, PERMISSION_FLAGS.PROJECT_MANAGE) &&
+      !hasPermission(roleCtx, PERMISSION_FLAGS.ORG_MANAGE_SETTINGS)
+    ) {
+      throw new AppError(403, 'Forbidden: requires Org Admin or assigned Project Manager');
+    }
+    const stagesRes = await pool.query(`SELECT stage_id FROM stages WHERE project_id = $1`, [projectId]);
+    const projSet = new Set(stagesRes.rows.map((s) => String(s.stage_id)));
+    const memRes = await pool.query(`SELECT allocated_stage_ids FROM org_members WHERE org_id = $1 AND user_id = $2`, [
+      ownerOrgId,
+      userId,
+    ]);
+    const existing = Array.isArray(memRes.rows[0]?.allocated_stage_ids)
+      ? (memRes.rows[0].allocated_stage_ids as string[])
+      : [];
+    const remaining = existing.filter((id) => !projSet.has(id));
+    await pool.query(`UPDATE org_members SET allocated_stage_ids = $1::jsonb WHERE org_id = $2 AND user_id = $3`, [
+      JSON.stringify(remaining),
+      ownerOrgId,
+      userId,
+    ]);
+    return { removed: true, userId };
+  },
+
   async getTaskAiInsights(auth: AuthContext, projectId: string, taskId: string) {
     const { ownerOrgId, ownerShardId } = await this.resolveAccess(auth.userId, auth.activeOrgId, projectId);
     const scoreRes = await dataRouter.postgres
